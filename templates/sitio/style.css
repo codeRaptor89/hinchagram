@@ -1,0 +1,62 @@
+
+body{
+  background: #0080a0;
+}
+.card-list .card-item{
+  color: #fff;
+  width: 100%;
+  max-width: 190px;
+  height: 150px;
+  padding: 0px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(105, 105, 105, 0.356); /* más oscuro */
+  border: 2px solid #fff; /* blanco, visible */
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4); /* profundidad */
+  margin-bottom: 0px;
+} /* tamano de toda la tarjeta */
+
+.card-list .card-item .user-image{
+  width: 160px;
+  height: 110px;
+  border-radius: 10px;
+  background-color: #ffffff;
+  margin-bottom: 0px;
+  border: 2px solid #ffffff;
+  padding: 2px;
+} /* tamano de la imagen del card */
+
+.card-list .card-item .user-profession{
+  font-size: 0.8rem;
+  color: #292929;
+  font-weight: 500;
+  margin: 1px 0 1px;
+} /* tamano texto arriba del boton */
+
+.card-list .card-item .message-button{
+  font-size: 1.25rem;
+  padding: 2px 15px;
+  color: #030728;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid transparent;
+  transition: 0.2s ease;
+}   /* tamano del boton */
+
+.card-list .card-item .message-button:hover{
+  background: rgba(230, 229, 250, 0.2);
+  border: 1px solid #fff;
+  color: #fff;
+}
+
+.card-clickable:hover {
+  background-color: #f0f0f0;
+  transition: background-color 0.3s;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+

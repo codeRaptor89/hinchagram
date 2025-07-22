@@ -1,0 +1,263 @@
+{% include 'sitio/cabecera.html' %}
+
+<style>
+  .video-wrapper {
+    width: 100%;
+    position: relative;
+    max-width: 960px;
+    background-color: black;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0 auto;
+  }
+
+  .card-custom {
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+  }
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  #spinner-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 10;
+    color: #ffffff;
+    font-family: sans-serif;
+    display: none;
+    margin-bottom: 1rem;
+    pointer-events: none;
+  }
+
+  #spinner {
+    margin: 0 auto 10px;
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #3498db;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .titulo {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 1.8rem;
+  }
+</style>
+
+<body style="margin: 0; padding: 30px 10px; background: #f0f2f5; font-family: Arial, sans-serif;">
+  <div style="max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px;">
+
+    {% if evento %}
+    <h1 class="titulo">{{evento}}</h1>
+    {% endif %}
+
+    <div class="card card-custom shadow">
+      <div class="card-body text-center">
+        <div class="video-wrapper">
+          <div id="spinner-container">
+            <div id="spinner"></div>
+            <p>🔄 Por favor espere 15 segundos mientras se carga...</p>
+          </div>
+          <video id="video" controls autoplay muted width="640" height="360" class="mt-3"></video>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 100%; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+      <h3 style="margin-top: 0; text-align: center; color: #333;">Chat del evento</h3>
+
+      <div id="chat" style="height: 300px; border: 1px solid #ccc; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px;"></div>
+
+      <div style="margin-top: 10px; display: flex; gap: 10px;">
+        <input type="text" id="message" placeholder="Escribe tu mensaje..." style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px;" disabled>
+        <button onclick="sendMessage()" id="sendBtn" style="padding: 10px 15px; border: none; background-color: #007BFF; color: white; border-radius: 5px; cursor: pointer;" disabled>Enviar</button>
+      </div>
+    </div>
+
+    <!-- Modal para nombre -->
+    <div id="nameModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); text-align:center;">
+      <div style="margin-top:100px; background:#fff; padding:20px; display:inline-block; border-radius: 10px;">
+        <h3>Ingresa tu nombre para participar en el chat</h3>
+        <input type="text" id="nameInput" placeholder="Tu nombre" style="padding: 10px; width: 80%; border: 1px solid #ccc; border-radius: 5px;">
+        <br><br>
+        <button onclick="registrarNombre()" style="padding: 10px 20px; border: none; background-color: #28a745; color: white; border-radius: 5px; cursor: pointer;">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+
+  <script>
+    const video = document.getElementById('video');
+    const spinnerContainer = document.getElementById('spinner-container');
+
+    async function cargarStream() {
+      spinnerContainer.style.display = 'block';
+      try {
+        const res = await fetch('/api/m3u8');
+        const data = await res.json();
+
+        console.log("Respuesta del servidor:", data);
+
+        if (data.error || !data.url) {
+          document.getElementById('estado').innerText = "❌ Error al obtener el stream";
+          spinnerContainer.style.display = 'none';
+          console.error(data.error);
+          return;
+        }
+
+        const url = data.url;
+
+        if (Hls.isSupported()) {
+          const hls = new Hls();
+          hls.loadSource(url);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            video.play();
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = url;
+          video.addEventListener('loadedmetadata', function () {
+            video.play();
+          });
+        }
+
+      } catch (error) {
+        console.error("❌ Error de red:", error);
+        spinnerContainer.style.display = 'none';
+      }
+    }
+
+    video.addEventListener('playing', () => {
+      spinnerContainer.style.display = 'none';
+    });
+
+    video.addEventListener('waiting', () => {
+      spinnerContainer.style.display = 'block';
+    });
+
+    video.addEventListener('canplay', () => {
+      spinnerContainer.style.display = 'none';
+    });
+
+    cargarStream();
+
+  </script>
+
+
+
+
+  <script>
+  const socket = io();
+  var event_id = {{ (event_id | default('null')) | tojson | safe }};
+  var username = {{ (user['nombre'] if user and 'nombre' in user else '') | tojson | safe }};
+  var mensajes = {{ (mensajes | default([])) | tojson | safe }};
+
+  mensajes.forEach(m => appendMessage(m.nombre || 'Anónimo', m.mensaje));
+
+  socket.emit('join', { event_id });
+
+  socket.on('message', function (data) {
+    appendMessage(data.user || 'Anónimo', data.message || '');
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!username) {
+      document.getElementById("nameModal").style.display = "block";
+    } else {
+      document.getElementById("message").disabled = false;
+      document.getElementById("sendBtn").disabled = false;
+    }
+
+    // ⏎ Enviar con Enter
+    document.getElementById('message').addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault(); // Evita salto de línea
+        sendMessage();
+      }
+    });
+  });
+
+  function sendMessage() {
+    const input = document.getElementById('message');
+    const msg = input.value.trim();
+    if (!msg) return;
+    socket.emit('message', { message: msg, event_id });
+    input.value = '';
+  }
+
+  function appendMessage(user, message) {
+    const chat = document.getElementById('chat');
+    const msgContainer = document.createElement('div');
+    msgContainer.style.marginBottom = '6px';
+    msgContainer.style.padding = '4px 8px';
+    msgContainer.style.background = '#e1f5fe';
+    msgContainer.style.borderRadius = '6px';
+    msgContainer.style.maxWidth = '80%';
+    msgContainer.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+    msgContainer.style.fontFamily = 'Arial, sans-serif';
+    msgContainer.style.fontSize = '12px'; // 👈 Tamaño más pequeño
+
+    const nameTag = document.createElement('strong');
+    nameTag.textContent = user + ': ';
+    msgContainer.appendChild(nameTag);
+
+    const text = document.createTextNode(message);
+    msgContainer.appendChild(text);
+
+    chat.appendChild(msgContainer);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function registrarNombre() {
+    const input = document.getElementById('nameInput');
+    const nombre = input.value.trim();
+    if (!nombre) {
+      alert("Escribe tu nombre.");
+      return;
+    }
+
+    fetch("/api/registrar_nombre", {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'ok') {
+          username = nombre;
+          document.getElementById("nameModal").style.display = "none";
+          document.getElementById("message").disabled = false;
+          document.getElementById("sendBtn").disabled = false;
+        } else {
+          alert(data.mensaje || "Error");
+        }
+      })
+      .catch(err => alert("Fallo al registrar nombre"));
+  }
+</script>
+
+</body>
+
+{% include 'sitio/pie.html' %}

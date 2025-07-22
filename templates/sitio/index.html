@@ -1,0 +1,176 @@
+{% include 'sitio/cabecera.html' %}
+
+<style>
+  .Titulo_agenda {
+    text-align: center;
+    margin-top: 20px;
+  }
+</style>
+
+<header>
+
+  <!-- place navbar here -->
+  <nav class="navbar navbar-light bg-light">
+
+
+    <a class="navbar-brand d-flex align-items-center me-auto" href="/">
+      <img src="/templates/img/logo.png" alt="Logo de mi sitio" width="60" height="60" class="me-2">
+    </a>
+
+    <!-- 🔵 Banderas alineadas a la derecha -->
+    <div class="d-flex gap-2">
+      <a class="navbar-brand" href="#">
+        <img src="/templates/banderas/Argentina.png" alt="" width="30" height="24">
+      </a>
+
+      <a class="navbar-brand" href="#">
+        <img src="/templates/banderas/Espana.png" alt="" width="30" height="24">
+      </a>
+
+      <a class="navbar-brand" href="#">
+        <img src="/templates/banderas/Ecuador.png" alt="" width="30" height="24">
+      </a>
+
+      <a class="navbar-brand" href="#">
+        <img src="/templates/banderas/Peru.png" alt="" width="30" height="24">
+      </a>
+
+      <a class="navbar-brand" href="#">
+        <img src="/templates/banderas/Uruguay.png" alt="" width="30" height="24">
+      </a>
+
+      <a class="navbar-brand" href="#">
+        <img src="/templates/banderas/Colombia.png" alt="" width="30" height="24">
+      </a>
+
+      <a class="navbar-brand" href="#">
+        <img src="/templates/banderas/Mexico.png" alt="" width="30" height="24">
+      </a>
+
+      <a class="navbar-brand" href="#">
+        <img src="/templates/banderas/Chile.png" alt="" width="30" height="24">
+      </a>
+
+    </div>
+  </nav>
+
+</header>
+
+<main>
+
+  {% if fecha_actual %}
+
+  <h5 class="Titulo_agenda">Eventos del {{fecha_actual.day}} de {{ fecha_actual.strftime('%B').capitalize() }}
+    {{fecha_actual.year}}</h5>
+
+  {% endif %}
+
+  <div class="card" style="margin: 20px;">
+
+    <div class="card body" style="margin: 20px;">
+      <!-- Contenedor principal del acordeón -->
+      <div class="accordion" id="accordionExample">
+
+        <!-- Bucle sobre la lista de partidos -->
+        {% for partido in partidos %}
+        {% set index = loop.index %} <!-- Usamos el índice del bucle para generar IDs únicos -->
+        <!-- Cada ítem del acordeón -->
+        <div class="accordion-item">
+          <!-- Encabezado del acordeón con botón colapsable -->
+          <h2 class="accordion-header" id="headingOne">
+            <button class="accordion-button" style="background-color: rgba(165, 227, 255, 0.5);" type="button"
+              data-bs-toggle="collapse" data-bs-target="#collapse{{ index }}" { Apunta al contenido a colapsar }
+              aria-expanded="true" aria-controls="collapse{{ index }}">
+              {{ partido.evento }} <!-- Muestra el nombre del evento -->
+            </button>
+          </h2>
+          <!-- Contenido colapsable del acordeón -->
+          <div id="collapse{{ index }}" class="accordion-collapse collapse" { Por defecto cerrado }
+            aria-labelledby="heading{{ index }}" data-bs-parent="#accordionExample">
+            <!-- Garantiza que solo uno se abra a la vez -->
+            <div class="accordion-body">
+
+              <!-- Lista horizontal de botones de canales -->
+              <ul style="list-style: none; padding: 0; margin: 0; display: flex;">
+
+                <!-- Bucle sobre los canales del partido -->
+                {% for canal in partido.canales %}
+                <li class="nav-item" style="margin-right: 5px;">
+
+                  <!-- Formulario para enviar los datos del canal -->
+                  <form action="{{ url_for('verPartido') }}" method="post" style="display:inline;">
+                    <!-- Campos ocultos con la información que se envía -->
+                    <input type="hidden" name="canal_url" value="{{ canal.url }}">
+                    <input type="hidden" name="canal" value="{{ canal.nombre_canal }}">
+                    <input type="hidden" name="nombre_evento" value="{{ partido.evento }}">
+                    <input type="hidden" name="evento_id" value="{{ partido.id }}">
+                    <!-- Botón que representa el canal -->
+                    <button type="submit" class="btn btn-outline-primary">{{ canal.nombre_canal }}</button>
+                  </form>
+
+                </li>
+                {% endfor %}
+              </ul>
+
+            </div>
+          </div>
+        </div>
+
+        {% endfor %}
+
+      </div>
+    </div>
+
+  </div>
+
+  {# <a class="nav-link active"
+    href="{{ url_for('verPartido') }}?canal_url={{ canal.url | urlencode }}&canal={{ canal.nombre_canal | urlencode }}"
+    aria-current="page">
+    <button type="button" class="btn btn-outline-primary">{{ canal.nombre_canal }}</button>
+  </a> #}
+
+
+  <!-- TABLA DE CANALES -->
+  <div class="container mt-5">
+    <h2>Tabla de Tarjetas</h2>
+    <div class="row row-cols-1 row-cols-md-5 g-4">
+      {% for canales in canal %}
+      <!-- Formulario para enviar los datos del canal -->
+      <form action="{{ url_for('verCanal') }}" method="post" style="display:inline;">
+        <!-- Campos ocultos con la información que se envía -->
+        <input type="hidden" name="canal_url" value="{{ canales.url }}">
+        <input type="hidden" name="canal" value="{{ canales.nombre }}">
+        <input type="hidden" name="imagen" value="{{ canales.imagen }}">
+
+        <div class="col mb-4">
+          <div class="card-list">
+            <div class="card-item card-clickable">
+              <img src="{{ canales.imagen }}" width="300" height="300" alt="{{ canales.nombre }}" class="user-image">
+              <p class="user-profession">{{ canales.nombre }}</p>
+            </div>
+          </div>
+        </div>
+      </form>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- JavaScript para hacer clic en la tarjeta y enviar el formulario -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const clickableCards = document.querySelectorAll('.card-clickable');
+
+      clickableCards.forEach(function (card) {
+        card.style.cursor = 'pointer'; // Visualmente se ve como clicable
+        card.addEventListener('click', function () {
+          const form = card.closest('form');
+          if (form) form.submit();
+        });
+      });
+    });
+  </script>
+
+
+</main>
+
+{% include 'sitio/pie.html' %}
