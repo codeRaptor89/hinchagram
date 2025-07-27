@@ -1,6 +1,7 @@
 {% include 'sitio/cabecera.html' %}
 
 <style>
+  /* Estilos del reproductor de video */
   .video-wrapper {
     width: 100%;
     position: relative;
@@ -53,14 +54,30 @@
   }
 
   @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+      transform: rotate(0deg);
+    }
+
+    100% {
+      transform: rotate(360deg);
+    }
   }
 
   .titulo {
     text-align: center;
     margin-top: 10px;
     font-size: 1.8rem;
+  }
+
+  /* Estilos para el formulario de cambio de nombre */
+  #changeNameContainer {
+
+    text-align: center;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    margin-top: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
 </style>
 
@@ -71,6 +88,7 @@
     <h1 class="titulo">{{evento}}</h1>
     {% endif %}
 
+    <!-- Video -->
     <div class="card card-custom shadow">
       <div class="card-body text-center">
         <div class="video-wrapper">
@@ -83,31 +101,48 @@
       </div>
     </div>
 
-    <div style="width: 100%; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+    <!-- CHAT HTML -->
+    <div
+      style="width: 100%; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
       <h3 style="margin-top: 0; text-align: center; color: #333;">Chat del evento</h3>
 
-      <div id="chat" style="height: 300px; border: 1px solid #ccc; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px;"></div>
+      <!-- Área de mensajes -->
+      <div id="chat"
+        style="height: 300px; border: 1px solid #ccc; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px;">
+      </div>
 
+      <!-- Input y botón para enviar -->
       <div style="margin-top: 10px; display: flex; gap: 10px;">
-        <input type="text" id="message" placeholder="Escribe tu mensaje..." style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px;" disabled>
-        <button onclick="sendMessage()" id="sendBtn" style="padding: 10px 15px; border: none; background-color: #007BFF; color: white; border-radius: 5px; cursor: pointer;" disabled>Enviar</button>
+        <input type="text" id="message" placeholder="Escribe tu mensaje..."
+          style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px;" disabled>
+        <button onclick="sendMessage()" id="sendBtn"
+          style="padding: 10px 15px; border: none; background-color: #007BFF; color: white; border-radius: 5px; cursor: pointer;"
+          disabled>Enviar</button>
       </div>
     </div>
 
-    <!-- Modal para nombre -->
-    <div id="nameModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); text-align:center;">
-      <div style="margin-top:100px; background:#fff; padding:20px; display:inline-block; border-radius: 10px;">
-        <h3>Ingresa tu nombre para participar en el chat</h3>
-        <input type="text" id="nameInput" placeholder="Tu nombre" style="padding: 10px; width: 80%; border: 1px solid #ccc; border-radius: 5px;">
-        <br><br>
-        <button onclick="registrarNombre()" style="padding: 10px 20px; border: none; background-color: #28a745; color: white; border-radius: 5px; cursor: pointer;">Guardar</button>
-      </div>
+    <!-- Cambio de nombre -->
+    <div id="changeNameContainer">
+      <h3>Cambiar nombre (puedes hacerlo solo una vez al día)</h3>
+      <input type="text" id="nameInput" placeholder="Nuevo nombre"
+        style="padding: 10px; width: 80%; border: 1px solid #ccc; border-radius: 5px;">
+      <br><br>
+      <button onclick="registrarNombre()"
+        style="padding: 10px 20px; border: none; background-color: #28a745; color: white; border-radius: 5px; cursor: pointer;">Guardar</button>
     </div>
   </div>
 
+  <!-- Indicador de carga, al principio estará oculto -->
+  <div id="loading" style="display: none;">
+    <p>Registrando...</p> <!-- O puedes usar un spinner aquí -->
+  </div>
+
+
+  <!-- Librerías externas -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 
+  <!-- STREAM VIDEO -->
   <script>
     const video = document.getElementById('video');
     const spinnerContainer = document.getElementById('spinner-container');
@@ -118,12 +153,9 @@
         const res = await fetch('/api/m3u8');
         const data = await res.json();
 
-        console.log("Respuesta del servidor:", data);
-
         if (data.error || !data.url) {
-          document.getElementById('estado').innerText = "❌ Error al obtener el stream";
+          console.error("❌ Error al obtener el stream:", data.error);
           spinnerContainer.style.display = 'none';
-          console.error(data.error);
           return;
         }
 
@@ -149,114 +181,243 @@
       }
     }
 
-    video.addEventListener('playing', () => {
-      spinnerContainer.style.display = 'none';
-    });
-
-    video.addEventListener('waiting', () => {
-      spinnerContainer.style.display = 'block';
-    });
-
-    video.addEventListener('canplay', () => {
-      spinnerContainer.style.display = 'none';
-    });
+    // Mostrar u ocultar spinner según el estado del video
+    video.addEventListener('playing', () => spinnerContainer.style.display = 'none');
+    video.addEventListener('waiting', () => spinnerContainer.style.display = 'block');
+    video.addEventListener('canplay', () => spinnerContainer.style.display = 'none');
 
     cargarStream();
-
   </script>
 
-
-
-
+  <!-- CHAT SOCKET.IO -->
   <script>
-  const socket = io();
-  var event_id = {{ (event_id | default('null')) | tojson | safe }};
-  var username = {{ (user['nombre'] if user and 'nombre' in user else '') | tojson | safe }};
-  var mensajes = {{ (mensajes | default([])) | tojson | safe }};
 
-  mensajes.forEach(m => appendMessage(m.nombre || 'Anónimo', m.mensaje));
+    let lastChanged = '{{ last_changed }}'; // Fecha de último cambio de nombre
 
-  socket.emit('join', { event_id });
+    // Asegúrate de que socket está disponible globalmente
+    let socket = io();  // Conexión con el servidor de Socket.IO
 
-  socket.on('message', function (data) {
-    appendMessage(data.user || 'Anónimo', data.message || '');
-  });
+    let username = '{{ username }}';  // Recuperar el nombre de usuario desde la plantilla
 
-  document.addEventListener("DOMContentLoaded", function () {
-    if (!username) {
-      document.getElementById("nameModal").style.display = "block";
-    } else {
-      document.getElementById("message").disabled = false;
-      document.getElementById("sendBtn").disabled = false;
-    }
-
-    // ⏎ Enviar con Enter
-    document.getElementById('message').addEventListener('keydown', function (event) {
-      if (event.key === 'Enter') {
-        event.preventDefault(); // Evita salto de línea
-        sendMessage();
+    // Esperar a que el documento esté cargado
+    document.addEventListener("DOMContentLoaded", function () {
+      // Verificar si el usuario ya está registrado
+      if (username && username.trim() !== '' && username !== 'None' && username !== 'Null') {
+        habilitarInputYBoton();  // Habilitar el input y el botón si el usuario está registrado
+        console.log(username)
+      } else {
+        // Mostrar el mensaje en el formulario de registro y deshabilitar chat
+        document.getElementById("changeNameContainer").innerHTML = `
+      <h3>Para participar en el chat, por favor regístrate con un nombre.</h3>
+      <input type="text" id="nameInput" placeholder="Nuevo nombre"
+        style="padding: 10px; width: 80%; border: 1px solid #ccc; border-radius: 5px;">
+      <br><br>
+      <button onclick="registrarNombre()" style="padding: 10px 20px; border: none; background-color: #28a745; color: white; border-radius: 5px; cursor: pointer;">Guardar</button>
+    `;
+        document.getElementById("message").disabled = true;  // Deshabilitar el input de mensaje
+        document.getElementById("sendBtn").disabled = true;  // Deshabilitar el botón de enviar
       }
+
+      // Verificar si el nombre puede ser cambiado
+      if (lastChanged) {
+        const today = new Date().toISOString().split('T')[0];  // Obtener la fecha de hoy en formato YYYY-MM-DD
+        if (lastChanged === today) {
+          // Si el nombre fue cambiado hoy, deshabilitar la opción de cambio de nombre
+          document.getElementById("changeNameContainer").innerHTML = "<p>Ya has cambiado tu nombre hoy.</p>";
+        }
+      }
+
+      // Obtener los mensajes después de que la página se haya cargado
+      obtenerMensajes();
+
+      // Conexión al socket para nuevos mensajes
+      const socket = io(); // Conexión con el servidor
+      socket.emit('join', { event_id: '{{ event_id }}' });
+
+      // Escuchar nuevos mensajes en tiempo real
+      socket.on('message', function (data) {
+        console.log(data);  // Ver si los mensajes están llegando
+        appendMessage(data.user || 'Anónimo', data.message || '');
+      });
+
+      // Agregar un evento para escuchar la tecla "Enter"
+      const messageInput = document.getElementById('message');
+      messageInput.addEventListener('keypress', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();  // Evitar el comportamiento por defecto de presionar Enter (para no enviar un formulario)
+          sendMessage();  // Enviar el mensaje cuando se presiona Enter
+        }
+      });
+
     });
-  });
 
-  function sendMessage() {
-    const input = document.getElementById('message');
-    const msg = input.value.trim();
-    if (!msg) return;
-    socket.emit('message', { message: msg, event_id });
-    input.value = '';
-  }
 
-  function appendMessage(user, message) {
-    const chat = document.getElementById('chat');
-    const msgContainer = document.createElement('div');
-    msgContainer.style.marginBottom = '6px';
-    msgContainer.style.padding = '4px 8px';
-    msgContainer.style.background = '#e1f5fe';
-    msgContainer.style.borderRadius = '6px';
-    msgContainer.style.maxWidth = '80%';
-    msgContainer.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-    msgContainer.style.fontFamily = 'Arial, sans-serif';
-    msgContainer.style.fontSize = '12px'; // 👈 Tamaño más pequeño
 
-    const nameTag = document.createElement('strong');
-    nameTag.textContent = user + ': ';
-    msgContainer.appendChild(nameTag);
-
-    const text = document.createTextNode(message);
-    msgContainer.appendChild(text);
-
-    chat.appendChild(msgContainer);
-    chat.scrollTop = chat.scrollHeight;
-  }
-
-  function registrarNombre() {
-    const input = document.getElementById('nameInput');
-    const nombre = input.value.trim();
-    if (!nombre) {
-      alert("Escribe tu nombre.");
-      return;
+    // Función para obtener los mensajes desde la API
+    function obtenerMensajes() {
+      fetch(`/api/mensajes?evento_id={{ event_id }}`)
+        .then(response => response.json())
+        .then(data => {
+          // Si los mensajes son exitosos, mostrar en el chat
+          if (Array.isArray(data)) {
+            data.forEach(m => appendMessage(m.nombre || 'Anónimo', m.mensaje));
+          } else {
+            console.error('Error al cargar los mensajes:', data.error);
+          }
+        })
+        .catch(error => console.error('Error al obtener los mensajes:', error));
     }
 
-    fetch("/api/registrar_nombre", {
-      method: "POST",
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.status === 'ok') {
-          username = nombre;
-          document.getElementById("nameModal").style.display = "none";
-          document.getElementById("message").disabled = false;
-          document.getElementById("sendBtn").disabled = false;
-        } else {
-          alert(data.mensaje || "Error");
-        }
+    // Función para mostrar el mensaje en el chat
+    function appendMessage(user, message) {
+      const chat = document.getElementById('chat');
+      const msgContainer = document.createElement('div');
+      msgContainer.style.marginBottom = '6px';
+      msgContainer.style.padding = '4px 8px';
+      msgContainer.style.background = '#e1f5fe';
+      msgContainer.style.borderRadius = '6px';
+      msgContainer.style.maxWidth = '80%';
+      msgContainer.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+      msgContainer.style.fontFamily = 'Arial, sans-serif';
+      msgContainer.style.fontSize = '12px';
+
+      const nameTag = document.createElement('strong');
+      nameTag.textContent = user + ': ';
+      msgContainer.appendChild(nameTag);
+
+      const text = document.createTextNode(message);
+      msgContainer.appendChild(text);
+
+      chat.appendChild(msgContainer);  // Agregar los mensajes al final del contenedor
+      chat.scrollTop = 0;  // Mantener el scroll arriba
+      // Insertar el mensaje al principio (no al final)
+      chat.insertBefore(msgContainer, chat.firstChild);  // Inserta al principio
+    }
+
+    // Función para habilitar el input y el botón de enviar
+    function habilitarInputYBoton() {
+      document.getElementById("message").disabled = false;  // Habilitar el input
+      document.getElementById("sendBtn").disabled = false;  // Habilitar el botón de enviar
+    }
+
+    // Función para cerrar el modal y habilitar el input
+    function cerrarModalYHabilitarInput() {
+      document.getElementById("nameModal").style.display = "none";  // Ocultar modal
+      habilitarInputYBoton();  // Habilitar el input y botón
+    }
+
+    // Función para enviar el mensaje
+    function sendMessage() {
+      if (!username) {
+        // Si el usuario no está registrado, mostrar un mensaje en el contenedor de registro
+        alert("Para enviar un mensaje, primero debes registrarte.");
+        document.getElementById("changeNameContainer").innerHTML = `
+      <h3>Para participar en el chat, por favor regístrate con un nombre.</h3>
+      <input type="text" id="nameInput" placeholder="Nuevo nombre"
+        style="padding: 10px; width: 80%; border: 1px solid #ccc; border-radius: 5px;">
+      <br><br>
+      <button onclick="registrarNombre()" style="padding: 10px 20px; border: none; background-color: #28a745; color: white; border-radius: 5px; cursor: pointer;">Guardar</button>
+    `;
+        return;  // No continuar con el envío de mensaje
+      }
+
+      const messageInput = document.getElementById('message');  // Obtener el valor del input
+      const message = messageInput.value.trim();  // Limpiar el mensaje
+      if (!message) {
+        alert("Por favor escribe un mensaje.");
+        return;  // No enviar el mensaje si está vacío
+      }
+
+      // Emitir el mensaje al servidor de Socket.IO
+      socket.emit('message', {
+        user: username,  // El nombre del usuario
+        message: message,  // El contenido del mensaje
+        event_id: '{{ event_id }}'  // El ID del evento
+      });
+
+      // Limpiar el input después de enviar el mensaje
+      messageInput.value = '';
+      messageInput.disabled = true;  // Deshabilitar el input mientras se espera una respuesta
+      document.getElementById('sendBtn').disabled = true;  // Deshabilitar el botón de enviar
+
+      // Volver a habilitar el input y el botón después de unos segundos o cuando el servidor responda
+      setTimeout(() => {
+        messageInput.disabled = false;
+        document.getElementById('sendBtn').disabled = false;
+      }, 1000);  // Espera 1 segundo para volver a habilitar
+
+    }
+
+
+    // Función para registrar o cambiar el nombre
+    function registrarNombre() {
+      const input = document.getElementById('nameInput');
+      const nombre = input.value.trim();
+
+      // Verifica si el nombre está vacío
+      if (!nombre) {
+        alert("Escribe tu nombre.");
+        return;
+      }
+
+      console.log("Enviando solicitud de registro...");
+
+      // Mostrar indicador de carga
+      const loadingElement = document.getElementById('loading');
+      if (loadingElement) {
+        loadingElement.style.display = 'block';  // Muestra el loading
+      }
+
+      // Realizar la solicitud fetch
+      fetch("/api/registrar_nombre", {
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre })
       })
-      .catch(err => alert("Fallo al registrar nombre"));
-  }
-</script>
+        .then(res => res.json())
+        .then(data => {
+          console.log("Respuesta del backend:", data);
+
+          // Ocultar el indicador de carga
+          if (loadingElement) {
+            loadingElement.style.display = 'none';  // Oculta el loading
+          }
+
+          if (data.status === 'ok') {
+            username = nombre;  // Asigna el nombre ingresado a la variable global
+            habilitarInputYBoton();  // Habilitar chat
+
+            // Cerrar el modal si existe
+            const nameModal = document.getElementById("nameModal");
+            if (nameModal) {
+              nameModal.style.display = "none"; // Solo oculta si el modal existe
+            } else {
+              console.warn('Elemento con id "nameModal" no encontrado');
+            }
+
+            // Limpiar el campo de input
+            input.value = "";  // Borra el nombre del input
+
+            // Mostrar una alerta de éxito
+            alert("Registro exitoso");
+          } else {
+            alert(data.mensaje || "Error inesperado");
+          }
+        })
+        .catch(err => {
+          // Ocultar el indicador de carga en caso de error
+          if (loadingElement) {
+            loadingElement.style.display = 'none';  // Oculta el loading
+          }
+
+          alert("Fallo al registrar nombre");
+          console.error(err);
+        });
+    }
+
+
+
+  </script>
 
 </body>
 

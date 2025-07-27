@@ -1,4 +1,7 @@
-from flask import Flask, render_template, request, url_for, redirect, session
+import eventlet
+eventlet.monkey_patch() 
+
+from flask import Flask, render_template, request, url_for, redirect, session, jsonify
 import json
 import os
 import time
@@ -31,34 +34,60 @@ def get_user_by_ip(ip):
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute("SELECT * FROM chat_users WHERE ip = %s", (ip,))
         user = cursor.fetchone()
-    cursor.close()
-    conn.close()
+
     return user
 
-def create_user(name, ip):
+def create_user(name, ip, timestamp):
     conn = get_connection()
     with conn.cursor(dictionary=True) as cursor:
-        cursor.execute("INSERT INTO chat_users (nombre, ip) VALUES (%s, %s)", (name, ip))
+        cursor.execute("INSERT INTO chat_users (nombre, ip, timestamp) VALUES (%s, %s, %s)", (name, ip, timestamp))
         conn.commit()
-    cursor.close()
-    conn.close()
+
+from datetime import datetime
 
 @app.route('/api/registrar_nombre', methods=['POST'])
 def api_registrar_nombre():
     user_ip = request.remote_addr
     user = get_user_by_ip(user_ip)
 
+    # Si el usuario ya está registrado
     if user:
-        return {'status': 'ya_registrado'}
+        today = datetime.now().date()  # Obtener la fecha de hoy
+        # Verificar si el usuario ya cambió su nombre hoy
+        if user['timestamp'].date() == today:
+            return {'status': 'ya_registrado', 'mensaje': 'Ya has cambiado tu nombre hoy.'}
+        else:
+            # Si el nombre puede ser cambiado, actualizamos el nombre
+            data = request.get_json()
+            nombre = data.get('nombre', '').strip()
 
+            if not nombre:
+                return {'status': 'error', 'mensaje': 'Nombre vacío'}, 400
+
+            # Actualizar el nombre del usuario
+            update_user_name(user['id'], nombre)
+            return {'status': 'ok'}
+
+    # Si el usuario no está registrado, lo registramos por primera vez
     data = request.get_json()
     nombre = data.get('nombre', '').strip()
 
     if not nombre:
         return {'status': 'error', 'mensaje': 'Nombre vacío'}, 400
 
-    create_user(nombre, user_ip)
+    now = datetime.now()  # Capturar fecha y hora actual
+    # Crear un nuevo usuario
+    create_user(nombre, user_ip, now)
     return {'status': 'ok'}
+
+def update_user_name(user_id, new_name):
+    conn = get_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("UPDATE chat_users SET nombre = %s WHERE id = %s", (new_name, user_id))
+        conn.commit()
+    cursor.close()
+    conn.close()
+
 
 
 @socketio.on('join')
@@ -67,29 +96,41 @@ def on_join(data):
 
 @socketio.on('message')
 def handle_message(data):
-    user_ip = request.remote_addr
-    user = get_user_by_ip(user_ip)
-    if not user:
-        return
+    try:
+        # Obtener la IP del usuario
+        user_ip = request.remote_addr
+        user = get_user_by_ip(user_ip)
 
-    mensaje = data['message']
-    event_id = data['event_id']
+        if not user:
+            print(f"No se encontró usuario con la IP {user_ip}")
+            return
 
-    conn = get_connection()
-    user_id = user['id']  
-    with conn.cursor(dictionary=True) as cursor:
-        cursor.execute(
-        "INSERT INTO mensajes (usuario_id, evento_id, mensaje) VALUES (%s, %s, %s)",
-        (user_id, event_id, mensaje)
-        )
-    conn.commit()
-    cursor.close()
-    conn.close()
-    emit('message', {
-    'user': user['nombre'],
-    'message': mensaje,
-    'event_id': event_id   # ✅ esto es crucial
-    }, to=event_id)
+        mensaje = data['message']
+        event_id = data['event_id']
+
+        # Guardar mensaje en la base de datos
+        conn = get_connection()
+        user_id = user['id']  
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute(
+                "INSERT INTO mensajes (usuario_id, evento_id, mensaje) VALUES (%s, %s, %s)",
+                (user_id, event_id, mensaje)
+            )
+            conn.commit()  # Asegurarse de guardar los cambios
+
+        cursor.close()
+        conn.close()
+
+        # Emitir el mensaje a todos los usuarios conectados al evento
+        emit('message', {
+            'user': user['nombre'],
+            'message': mensaje,
+            'event_id': event_id  # Este es crucial para que el mensaje llegue solo a los clientes correctos
+        }, to=event_id)  # Emitir a todos los clientes escuchando este evento
+
+    except Exception as e:
+        print(f"Error al manejar el mensaje: {str(e)}")
+        # Aquí puedes decidir cómo manejar el error, por ejemplo, mostrar un mensaje a los usuarios.
 
 
 # Configurar localización para fechas en español
@@ -152,11 +193,12 @@ def index():
 
     # Conectar a la base de datos MySQL
     conexion = mysql.connector.connect(
-        host='localhost',
-        user='root',
-        password='',
+        host="miappdb.c7u6giqeygpc.us-east-2.rds.amazonaws.com",  # punto de enlace RDS
+        user="admin",
+        password="Lunita1808",
         database='futbol',
-        charset='utf8mb4'
+        charset='utf8mb4',
+        port=3306  # puerto de MySQL, aunque mysql.connector lo pone por defecto
     )
     cursor = conexion.cursor(dictionary=True)
 
@@ -190,6 +232,14 @@ def index():
     # Obtener lista completa de canales
     cursor.execute("SELECT * FROM canales")
     canales = cursor.fetchall()
+
+    # Obtener IP del usuario y verificar si ya tiene un nombre registrado
+    user_ip = request.remote_addr
+    cursor.execute("SELECT nombre FROM chat_users WHERE ip = %s", (user_ip,))
+    user = cursor.fetchone()
+
+    if user:
+        session['username'] = user['nombre']  # Guardar nombre en la sesión
 
     cursor.close()
     conexion.close()
@@ -226,28 +276,23 @@ def verPartido():
     
     user_ip = request.remote_addr
     user = get_user_by_ip(user_ip)
-    user = get_user_by_ip(user_ip)
-    print(f"[DEBUG] get_user_by_ip('{user_ip}') returned:", user)
-    print("evento  "  + event_id)
 
-    conn = get_connection()
-    with conn.cursor(dictionary=True) as cursor:
-        cursor.execute("""
-        SELECT m.mensaje, u.nombre
-        FROM mensajes m
-        JOIN chat_users u ON m.usuario_id = u.id
-        WHERE m.evento_id = %s
-        ORDER BY m.timestamp
-        """, (event_id,))
-        mensajes = cursor.fetchall()
-    conn.close()
+        # Recuperar el usuario desde la sesión
+    if user:
+        username = user['nombre']  # Si el usuario está registrado, obtenemos su nombre
+        last_changed = user['timestamp'].date()  # Fecha de último cambio de nombre
+    else:
+        username = None  # Si el usuario no está registrado, el valor será None
+        last_changed = None
+
 
     # 🔁 Ya no capturamos m3u8 aquí
     return render_template("sitio/verPartido.html", 
         evento=nombre_evento,
         user=user,
+        username=username,
         event_id=event_id,
-        mensajes=mensajes)
+        )
 
 
 # API para obtener URL m3u8 del stream actual
@@ -331,9 +376,31 @@ def obtener_canal_m3u8():
 
     return {"url": data["url"]}
 
+
+#obtiene los mensajes del eventos
+@app.route("/api/mensajes")
+def api_mensajes():
+    evento_id = request.args.get('evento_id')
+    if not evento_id:
+        return jsonify({"error": "Falta evento_id"}), 400
+
+    conn = get_connection()
+    with conn.cursor(dictionary=True) as cursor:
+        cursor.execute("""
+        SELECT m.mensaje, u.nombre
+        FROM mensajes m
+        LEFT JOIN chat_users u ON m.usuario_id = u.id
+        WHERE m.evento_id = %s
+        ORDER BY m.timestamp ASC
+        LIMIT 100;
+        """, (evento_id,))
+        mensajes = cursor.fetchall()
+    conn.close()
+    return jsonify(mensajes)
+
+
 if __name__ == "__main__":
-    import eventlet
-    eventlet.monkey_patch() 
+
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port)
 
