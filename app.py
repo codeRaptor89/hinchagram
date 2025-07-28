@@ -20,6 +20,7 @@ import atexit
 from playwright_manager import init_browser, close_browser
 from flask_socketio import SocketIO, emit, join_room
 from db_config_chat import get_connection
+from flask_cors import CORS
 
 # Crear un nuevo event loop de asyncio y establecerlo como el actual
 loop = asyncio.new_event_loop()
@@ -31,6 +32,7 @@ atexit.register(lambda: loop.run_until_complete(close_browser()))
 
 app = Flask(__name__, static_folder="templates")
 socketio = SocketIO(app, async_mode='threading')  # Usar threading en lugar de eventlet
+CORS(app)
 
 def get_user_by_ip(ip):
     conn = get_connection()
