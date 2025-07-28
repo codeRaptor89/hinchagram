@@ -1,3 +1,11 @@
+import eventlet
+from flask_socketio import SocketIO
+from gevent import monkey
+monkey.patch_all()  # Parche para hacer que todas las operaciones bloqueantes sean no bloqueantes
+
+from flask_socketio import SocketIO
+import gevent
+
 from flask import Flask, render_template, request, url_for, redirect, session, jsonify
 import json
 import os
@@ -337,5 +345,7 @@ def api_mensajes():
     return jsonify(mensajes)
 
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port)
+    # Usamos gevent para el servidor WSGI
+    from gevent.pywsgi import WSGIServer
+    server = WSGIServer(('0.0.0.0', 5000), app)
+    server.serve_forever()
