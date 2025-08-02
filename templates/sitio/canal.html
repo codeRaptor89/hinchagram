@@ -5,23 +5,21 @@
     width: 100%;
     position: relative;
     max-width: 960px;
-    aspect-ratio: 16 / 9;  /* mantiene proporción exacta */
+    aspect-ratio: 16 / 9;
     background-color: black;
     display: flex;
     flex-direction: column;
     align-items: center;
     margin: 0 auto;
-    /* <- centra horizontalmente dentro del card */
   }
-
 
   .card-custom {
     width: 100%;
-    max-width: 960px; /* igual al video-wrapper */
-    margin: 30px auto; /* centrado horizontal y separación vertical */
-    border-radius: 12px; /* bordes redondeados */
-    overflow: hidden; /* para que video o contenido no se desborde */
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3); /* sombra opcional */
+    max-width: 960px;
+    margin: 30px auto;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
   }
 
   video {
@@ -43,7 +41,6 @@
     display: none;
     margin-bottom: 1rem;
     pointer-events: none;
-    /* para que no bloquee controles del video */
   }
 
   #spinner {
@@ -57,27 +54,19 @@
   }
 
   @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-
-    100% {
-      transform: rotate(360deg);
-    }
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 
   .titulo {
     text-align: center;
     margin-top: 30px;
-    font-size: 1.5rem; /* Cambiá este valor según lo grande que querés el texto */
+    font-size: 1.5rem;
   }
 </style>
 
 {% if imagen %}
-
-<img src="{{imagen}}" alt="logo_can" width="100" style="padding: 10px;">
-
-
+  <img src="{{imagen}}" alt="logo_can" width="100" style="padding: 10px;">
 {% endif %}
 
 <div class="container">
@@ -104,62 +93,43 @@
   const spinnerContainer = document.getElementById('spinner-container');
 
   async function cargarStream() {
+    spinnerContainer.style.display = 'block';
 
-    spinnerContainer.style.display = 'block'; // Mostrar spinner y mensaje
+    const url = "/proxy_m3u8";
 
-    try {
-
-      const res = await fetch('/canal_normal');
-      const data = await res.json();
-
-      console.log("Respuesta del servidor:", data);
-
-      if (data.error || !data.url) {
-        document.getElementById('estado').innerText = "❌ Error al obtener el stream";
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        video.play();
         spinnerContainer.style.display = 'none';
-        console.error(data.error);
-        return;
-      }
-
-      const url = data.url;
-
-      if (Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(url);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, function () {
-          video.play();  // ⬅️ Forzamos el autoplay después de que cargó el manifest
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = url;
-        video.addEventListener('loadedmetadata', function () {
-          video.play();  // ⬅️ También para Safari nativo
-        });
-      }
-
-    } catch (error) {
-      console.error("❌ Error de red:", error);
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = url;
+      video.addEventListener('loadedmetadata', function () {
+        video.play();
+        spinnerContainer.style.display = 'none';
+      });
+    } else {
+      console.error("❌ HLS no soportado en este navegador");
       spinnerContainer.style.display = 'none';
     }
   }
 
-  // Ocultar spinner y mensaje cuando empieza a reproducirse
   video.addEventListener('playing', () => {
     spinnerContainer.style.display = 'none';
   });
 
-  // Mostrar si entra en buffering
   video.addEventListener('waiting', () => {
     spinnerContainer.style.display = 'block';
   });
 
-  // Ocultar si puede reproducir
   video.addEventListener('canplay', () => {
     spinnerContainer.style.display = 'none';
   });
 
-
-  cargarStream(); // 👈 Llamamos la función al cargar la página
+  cargarStream();
 </script>
 
 {% include 'sitio/pie.html' %}
