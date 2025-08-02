@@ -1,39 +1,43 @@
-import eventlet
-from flask_socketio import SocketIO
-from gevent import monkey
-monkey.patch_all()  # Parche para hacer que todas las operaciones bloqueantes sean no bloqueantes
-
-from flask_socketio import SocketIO
-import gevent
-
 from flask import Flask, render_template, request, url_for, redirect, session, jsonify
+from flask_socketio import SocketIO, emit, join_room
+from flask_cors import CORS
+from collections import defaultdict
+from datetime import datetime
 import json
 import os
 import time
 import asyncio
-from interceptar_m3u8 import capturar_m3u8
-from datetime import datetime
-from collections import defaultdict
 import mysql.connector
 import locale
 import atexit
-from playwright_manager import init_browser, close_browser
-from flask_socketio import SocketIO, emit, join_room
-from db_config_chat import get_connection
-from flask_cors import CORS
 
-# Crear un nuevo event loop de asyncio y establecerlo como el actual
+from interceptar_m3u8 import capturar_m3u8
+from playwright_manager import init_browser, close_browser
+from db_config_chat import get_connection
+
+# Configuración de la app
+app = Flask(__name__, static_folder="templates")
+app.secret_key = os.urandom(24)
+CORS(app)
+
+# Configurar SocketIO con threading (sin eventlet ni gevent)
+socketio = SocketIO(app, async_mode='threading')
+
+# Locale para fechas en español
+locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+
+# Manejo de caché
+CACHE_EXPIRATION = 60 * 60
+if not os.path.exists("cache"):
+    os.makedirs("cache")
+
+# Loop de asyncio para Playwright
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
-
-# Inicializar Playwright antes de iniciar Flask
 loop.run_until_complete(init_browser())
 atexit.register(lambda: loop.run_until_complete(close_browser()))
 
-app = Flask(__name__, static_folder="templates")
-socketio = SocketIO(app, async_mode='threading')  # Usar threading en lugar de eventlet
-CORS(app)
-
+# Funciones auxiliares
 def get_user_by_ip(ip):
     conn = get_connection()
     with conn.cursor(dictionary=True) as cursor:
@@ -54,74 +58,6 @@ def update_user_name(user_id, new_name):
         conn.commit()
     cursor.close()
     conn.close()
-
-@app.route('/api/registrar_nombre', methods=['POST'])
-def api_registrar_nombre():
-    user_ip = request.remote_addr
-    user = get_user_by_ip(user_ip)
-
-    if user:
-        today = datetime.now().date()
-        if user['timestamp'].date() == today:
-            return {'status': 'ya_registrado', 'mensaje': 'Ya has cambiado tu nombre hoy.'}
-        else:
-            data = request.get_json()
-            nombre = data.get('nombre', '').strip()
-            if not nombre:
-                return {'status': 'error', 'mensaje': 'Nombre vacío'}, 400
-            update_user_name(user['id'], nombre)
-            return {'status': 'ok'}
-
-    data = request.get_json()
-    nombre = data.get('nombre', '').strip()
-    if not nombre:
-        return {'status': 'error', 'mensaje': 'Nombre vacío'}, 400
-
-    now = datetime.now()
-    create_user(nombre, user_ip, now)
-    return {'status': 'ok'}
-
-@socketio.on('join')
-def on_join(data):
-    join_room(data['event_id'])
-
-@socketio.on('message')
-def handle_message(data):
-    try:
-        user_ip = request.remote_addr
-        user = get_user_by_ip(user_ip)
-        if not user:
-            print(f"No se encontró usuario con la IP {user_ip}")
-            return
-
-        mensaje = data['message']
-        event_id = data['event_id']
-        conn = get_connection()
-        user_id = user['id']
-        with conn.cursor(dictionary=True) as cursor:
-            cursor.execute(
-                "INSERT INTO mensajes (usuario_id, evento_id, mensaje) VALUES (%s, %s, %s)",
-                (user_id, event_id, mensaje)
-            )
-            conn.commit()
-
-        cursor.close()
-        conn.close()
-
-        emit('message', {
-            'user': user['nombre'],
-            'message': mensaje,
-            'event_id': event_id
-        }, to=event_id)
-    except Exception as e:
-        print(f"Error al manejar el mensaje: {str(e)}")
-
-locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-app.secret_key = os.urandom(24)
-CACHE_EXPIRATION = 60 * 60
-
-if not os.path.exists("cache"):
-    os.makedirs("cache")
 
 def token_expirado():
     canal_nombre = session.get('canal_nombre')
@@ -149,10 +85,7 @@ def token_canal_normal_expirado():
     except json.JSONDecodeError:
         return True
 
-@app.errorhandler(404)
-def not_found(error):
-    return redirect(url_for('index'))
-
+# Rutas
 @app.route("/")
 def index():
     session['logged_in'] = True
@@ -234,12 +167,7 @@ def verPartido():
     user_ip = request.remote_addr
     user = get_user_by_ip(user_ip)
 
-    if user:
-        username = user['nombre']
-        last_changed = user['timestamp'].date()
-    else:
-        username = None
-        last_changed = None
+    username = user['nombre'] if user else None
 
     return render_template("sitio/verPartido.html",
         evento=nombre_evento,
@@ -346,8 +274,30 @@ def api_mensajes():
     conn.close()
     return jsonify(mensajes)
 
-if __name__ == "__main__":
-    # Usamos gevent para el servidor WSGI
-    from gevent.pywsgi import WSGIServer
-    server = WSGIServer(('0.0.0.0', 5000), app)
-    server.serve_forever()
+@socketio.on('join')
+def on_join(data):
+    join_room(data['event_id'])
+
+@socketio.on('mensaje')
+def on_mensaje(data):
+    user_ip = request.remote_addr
+    user = get_user_by_ip(user_ip)
+    user_id = user['id'] if user else None
+
+    if not user_id:
+        emit('error', {'msg': 'Usuario no encontrado'})
+        return
+
+    evento_id = data.get('event_id')
+    mensaje = data.get('mensaje')
+
+    conn = get_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("INSERT INTO mensajes (evento_id, usuario_id, mensaje, timestamp) VALUES (%s, %s, %s, NOW())",
+                       (evento_id, user_id, mensaje))
+        conn.commit()
+
+    socketio.emit('nuevo_mensaje', {'mensaje': mensaje, 'usuario': user['nombre']}, room=evento_id)
+
+if __name__ == '__main__':
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
