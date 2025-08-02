@@ -137,6 +137,7 @@
     <p>Registrando...</p> <!-- O puedes usar un spinner aquí -->
   </div>
 
+
   <!-- Librerías externas -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
@@ -145,35 +146,42 @@
   <script>
     const video = document.getElementById('video');
     const spinnerContainer = document.getElementById('spinner-container');
-    const streamUrl = '/proxy_m3u8'; // URL directa al proxy para el stream
 
-    function cargarStream() {
+    async function cargarStream() {
       spinnerContainer.style.display = 'block';
+      try {
+        const res = await fetch('/api/m3u8');
+        const data = await res.json();
 
-      if (Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(streamUrl);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, function () {
-          video.play();
+        if (data.error || !data.url) {
+          console.error("❌ Error al obtener el stream:", data.error);
           spinnerContainer.style.display = 'none';
-        });
-        hls.on(Hls.Events.ERROR, function (event, data) {
-          console.error('Error HLS:', data);
-          spinnerContainer.style.display = 'none';
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = streamUrl;
-        video.addEventListener('loadedmetadata', function () {
-          video.play();
-          spinnerContainer.style.display = 'none';
-        });
-      } else {
-        console.error("❌ HLS no soportado en este navegador");
+          return;
+        }
+
+        const url = data.url;
+
+        if (Hls.isSupported()) {
+          const hls = new Hls();
+          hls.loadSource(url);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            video.play();
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = url;
+          video.addEventListener('loadedmetadata', function () {
+            video.play();
+          });
+        }
+
+      } catch (error) {
+        console.error("❌ Error de red:", error);
         spinnerContainer.style.display = 'none';
       }
     }
 
+    // Mostrar u ocultar spinner según el estado del video
     video.addEventListener('playing', () => spinnerContainer.style.display = 'none');
     video.addEventListener('waiting', () => spinnerContainer.style.display = 'block');
     video.addEventListener('canplay', () => spinnerContainer.style.display = 'none');
@@ -243,6 +251,8 @@
 
     });
 
+
+
     // Función para obtener los mensajes desde la API
     function obtenerMensajes() {
       fetch(`/api/mensajes?evento_id={{ event_id }}`)
@@ -278,10 +288,10 @@
       const text = document.createTextNode(message);
       msgContainer.appendChild(text);
 
-      // Insertar el mensaje al principio
-      chat.insertBefore(msgContainer, chat.firstChild);
-      // Ajustar scroll para mantener arriba
-      chat.scrollTop = 0;
+      chat.appendChild(msgContainer);  // Agregar los mensajes al final del contenedor
+      chat.scrollTop = 0;  // Mantener el scroll arriba
+      // Insertar el mensaje al principio (no al final)
+      chat.insertBefore(msgContainer, chat.firstChild);  // Inserta al principio
     }
 
     // Función para habilitar el input y el botón de enviar
@@ -290,63 +300,125 @@
       document.getElementById("sendBtn").disabled = false;  // Habilitar el botón de enviar
     }
 
-    // Función para enviar el mensaje
-    function sendMessage() {
-      const messageInput = document.getElementById('message');
-      const message = messageInput.value.trim();
-      if (!message) return;
-
-      socket.emit('message', {
-        user: username,
-        message: message,
-        event_id: '{{ event_id }}'
-      });
-
-      messageInput.value = '';
-      messageInput.focus();
+    // Función para cerrar el modal y habilitar el input
+    function cerrarModalYHabilitarInput() {
+      document.getElementById("nameModal").style.display = "none";  // Ocultar modal
+      habilitarInputYBoton();  // Habilitar el input y botón
     }
 
-    // Función para registrar el nombre del usuario
-    function registrarNombre() {
-      const newName = document.getElementById('nameInput').value.trim();
+    // Función para enviar el mensaje
+    function sendMessage() {
+      if (!username) {
+        // Si el usuario no está registrado, mostrar un mensaje en el contenedor de registro
+        alert("Para enviar un mensaje, primero debes registrarte.");
+        document.getElementById("changeNameContainer").innerHTML = `
+      <h3>Para participar en el chat, por favor regístrate con un nombre.</h3>
+      <input type="text" id="nameInput" placeholder="Nuevo nombre"
+        style="padding: 10px; width: 80%; border: 1px solid #ccc; border-radius: 5px;">
+      <br><br>
+      <button onclick="registrarNombre()" style="padding: 10px 20px; border: none; background-color: #28a745; color: white; border-radius: 5px; cursor: pointer;">Guardar</button>
+    `;
+        return;  // No continuar con el envío de mensaje
+      }
 
-      if (!newName) {
-        alert('Por favor ingresa un nombre válido.');
+      const messageInput = document.getElementById('message');  // Obtener el valor del input
+      const message = messageInput.value.trim();  // Limpiar el mensaje
+      if (!message) {
+        alert("Por favor escribe un mensaje.");
+        return;  // No enviar el mensaje si está vacío
+      }
+
+      // Emitir el mensaje al servidor de Socket.IO
+      socket.emit('message', {
+        user: username,  // El nombre del usuario
+        message: message,  // El contenido del mensaje
+        event_id: '{{ event_id }}'  // El ID del evento
+      });
+
+      // Limpiar el input después de enviar el mensaje
+      messageInput.value = '';
+      messageInput.disabled = true;  // Deshabilitar el input mientras se espera una respuesta
+      document.getElementById('sendBtn').disabled = true;  // Deshabilitar el botón de enviar
+
+      // Volver a habilitar el input y el botón después de unos segundos o cuando el servidor responda
+      setTimeout(() => {
+        messageInput.disabled = false;
+        document.getElementById('sendBtn').disabled = false;
+      }, 1000);  // Espera 1 segundo para volver a habilitar
+
+    }
+
+
+    // Función para registrar o cambiar el nombre
+    function registrarNombre() {
+      const input = document.getElementById('nameInput');
+      const nombre = input.value.trim();
+
+      // Verifica si el nombre está vacío
+      if (!nombre) {
+        alert("Escribe tu nombre.");
         return;
       }
 
-      // Mostrar indicador de carga
-      document.getElementById('loading').style.display = 'block';
+      console.log("Enviando solicitud de registro...");
 
-      // Enviar petición POST para registrar el nombre
-      fetch('/registrar_nombre', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ nombre: newName, event_id: '{{ event_id }}' })
+      // Mostrar indicador de carga
+      const loadingElement = document.getElementById('loading');
+      if (loadingElement) {
+        loadingElement.style.display = 'block';  // Muestra el loading
+      }
+
+      // Realizar la solicitud fetch
+      fetch("/api/registrar_nombre", {
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre })
       })
-        .then(response => response.json())
+        .then(res => res.json())
         .then(data => {
-          document.getElementById('loading').style.display = 'none';
-          if (data.status === 'success') {
-            alert('Nombre registrado correctamente. Ahora puedes chatear.');
-            username = newName;
-            habilitarInputYBoton();
-            document.getElementById('changeNameContainer').innerHTML = `<p>Hola <strong>${username}</strong>, ya puedes enviar mensajes.</p>`;
+          console.log("Respuesta del backend:", data);
+
+          // Ocultar el indicador de carga
+          if (loadingElement) {
+            loadingElement.style.display = 'none';  // Oculta el loading
+          }
+
+          if (data.status === 'ok') {
+            username = nombre;  // Asigna el nombre ingresado a la variable global
+            habilitarInputYBoton();  // Habilitar chat
+
+            // Cerrar el modal si existe
+            const nameModal = document.getElementById("nameModal");
+            if (nameModal) {
+              nameModal.style.display = "none"; // Solo oculta si el modal existe
+            } else {
+              console.warn('Elemento con id "nameModal" no encontrado');
+            }
+
+            // Limpiar el campo de input
+            input.value = "";  // Borra el nombre del input
+
+            // Mostrar una alerta de éxito
+            alert("Registro exitoso");
           } else {
-            alert('Error: ' + (data.message || 'No se pudo registrar el nombre.'));
+            alert(data.mensaje || "Error inesperado");
           }
         })
-        .catch(error => {
-          document.getElementById('loading').style.display = 'none';
-          alert('Error al registrar el nombre.');
-          console.error(error);
+        .catch(err => {
+          // Ocultar el indicador de carga en caso de error
+          if (loadingElement) {
+            loadingElement.style.display = 'none';  // Oculta el loading
+          }
+
+          alert("Fallo al registrar nombre");
+          console.error(err);
         });
     }
-  </script>
 
+
+
+  </script>
 
 </body>
 
-  {% include 'sitio/pie.html' %}
+{% include 'sitio/pie.html' %}

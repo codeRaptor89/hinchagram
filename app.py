@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, url_for, redirect, session, jsonify, Response
+from flask import Flask, render_template, request, url_for, redirect, session, jsonify
 from flask_socketio import SocketIO, emit, join_room
 from flask_cors import CORS
 from collections import defaultdict
@@ -10,7 +10,6 @@ import asyncio
 import mysql.connector
 import locale
 import atexit
-import requests
 
 from interceptar_m3u8 import capturar_m3u8
 from playwright_manager import init_browser, close_browser
@@ -44,7 +43,6 @@ def get_user_by_ip(ip):
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute("SELECT * FROM chat_users WHERE ip = %s", (ip,))
         user = cursor.fetchone()
-    conn.close()
     return user
 
 def create_user(name, ip, timestamp):
@@ -52,13 +50,13 @@ def create_user(name, ip, timestamp):
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute("INSERT INTO chat_users (nombre, ip, timestamp) VALUES (%s, %s, %s)", (name, ip, timestamp))
         conn.commit()
-    conn.close()
 
 def update_user_name(user_id, new_name):
     conn = get_connection()
     with conn.cursor() as cursor:
         cursor.execute("UPDATE chat_users SET nombre = %s WHERE id = %s", (new_name, user_id))
         conn.commit()
+    cursor.close()
     conn.close()
 
 def token_expirado():
@@ -300,42 +298,6 @@ def on_mensaje(data):
         conn.commit()
 
     socketio.emit('nuevo_mensaje', {'mensaje': mensaje, 'usuario': user['nombre']}, room=evento_id)
-
-# Nueva ruta proxy para evitar error 403
-@app.route('/proxy_m3u8')
-def proxy_m3u8():
-    source_url = session.get('source_url')
-    canal_nombre = session.get('canal_nombre')
-
-    if not source_url or not canal_nombre:
-        return {"error": "No se proporcionó URL"}, 400
-
-    filename = f"cache/{canal_nombre}.json"
-
-    if token_expirado() or not os.path.exists(filename):
-        data = loop.run_until_complete(capturar_m3u8(source_url))
-        if not data:
-            return {"error": "No se pudo capturar el stream"}, 500
-        with open(filename, "w") as f:
-            json.dump({**data, "timestamp": time.time()}, f)
-    else:
-        try:
-            with open(filename, "r") as f:
-                data = json.load(f)
-        except Exception as e:
-            return {"error": f"Error al leer caché: {e}"}, 500
-
-    stream_url = data["url"]
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-        }
-        resp = requests.get(stream_url, headers=headers, stream=True)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        return {"error": f"No se pudo acceder al stream: {e}"}, 502
-
-    return Response(resp.iter_content(chunk_size=1024), content_type=resp.headers.get('content-type', 'application/vnd.apple.mpegurl'))
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
