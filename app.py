@@ -15,34 +15,27 @@ from interceptar_m3u8 import capturar_m3u8
 from playwright_manager import init_browser, close_browser
 from db_config_chat import get_connection
 
-# Configuración de la app
 app = Flask(__name__, static_folder="templates")
 app.secret_key = os.urandom(24)
 CORS(app)
-
-# Configurar SocketIO con threading (sin eventlet ni gevent)
 socketio = SocketIO(app, async_mode='threading')
-
-# Locale para fechas en español
 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 
-# Manejo de caché
 CACHE_EXPIRATION = 60 * 60
 if not os.path.exists("cache"):
     os.makedirs("cache")
 
-# Loop de asyncio para Playwright
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 loop.run_until_complete(init_browser())
 atexit.register(lambda: loop.run_until_complete(close_browser()))
 
-# Funciones auxiliares
 def get_user_by_ip(ip):
     conn = get_connection()
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute("SELECT * FROM chat_users WHERE ip = %s", (ip,))
         user = cursor.fetchone()
+    conn.close()
     return user
 
 def create_user(name, ip, timestamp):
@@ -50,6 +43,7 @@ def create_user(name, ip, timestamp):
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute("INSERT INTO chat_users (nombre, ip, timestamp) VALUES (%s, %s, %s)", (name, ip, timestamp))
         conn.commit()
+    conn.close()
 
 def update_user_name(user_id, new_name):
     conn = get_connection()
@@ -85,7 +79,6 @@ def token_canal_normal_expirado():
     except json.JSONDecodeError:
         return True
 
-# Rutas
 @app.route("/")
 def index():
     session['logged_in'] = True
@@ -166,7 +159,6 @@ def verPartido():
 
     user_ip = request.remote_addr
     user = get_user_by_ip(user_ip)
-
     username = user['nombre'] if user else None
 
     return render_template("sitio/verPartido.html",
@@ -299,8 +291,6 @@ def on_mensaje(data):
 
     socketio.emit('nuevo_mensaje', {'mensaje': mensaje, 'usuario': user['nombre']}, room=evento_id)
 
-
-
 @app.route('/proxy_stream')
 def proxy_stream():
     canal_nombre = session.get("canal_nombre")
@@ -308,7 +298,6 @@ def proxy_stream():
         return {"error": "No se encontró el canal en la sesión"}, 400
 
     filename = f"cache/{canal_nombre}.json"
-
     if not os.path.exists(filename):
         return {"error": "No existe el archivo del canal"}, 404
 
@@ -321,14 +310,47 @@ def proxy_stream():
     if not m3u8_url:
         return {"error": "URL .m3u8 no válida"}, 500
 
-    # Stream desde el servidor hacia el usuario
-    def generate():
-        with requests.get(m3u8_url, headers=headers, stream=True) as r:
-            for chunk in r.iter_content(chunk_size=1024):
-                if chunk:
-                    yield chunk
+    try:
+        res = requests.get(m3u8_url, headers=headers, timeout=10)
+        content = res.text
 
-    return Response(stream_with_context(generate()), content_type="application/vnd.apple.mpegurl")
+        # Reescribir URLs absolutas o relativas de segmentos a /proxy_ts
+        base_url = m3u8_url.rsplit("/", 1)[0]
+        modified_lines = []
+        for line in content.splitlines():
+            if line.strip().endswith(".ts"):
+                if line.startswith("http"):
+                    full_url = line
+                else:
+                    full_url = f"{base_url}/{line}"
+                line = f"/proxy_ts?segment={full_url}"
+            modified_lines.append(line)
+
+        return Response("\n".join(modified_lines), content_type="application/vnd.apple.mpegurl")
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.route("/proxy_ts")
+def proxy_ts():
+    segment_url = request.args.get("segment")
+    canal_nombre = session.get("canal_nombre")
+    if not segment_url or not canal_nombre:
+        return {"error": "Datos faltantes"}, 400
+
+    filename = f"cache/{canal_nombre}.json"
+    if not os.path.exists(filename):
+        return {"error": "Stream no encontrado"}, 404
+
+    with open(filename, "r") as f:
+        data = json.load(f)
+    
+    headers = data.get("headers", {})
+    try:
+        r = requests.get(segment_url, headers=headers, stream=True, timeout=10)
+        return Response(stream_with_context(r.iter_content(1024)), content_type=r.headers.get("Content-Type"))
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
