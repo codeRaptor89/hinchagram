@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, url_for, redirect, session, jsonify
+from flask import Flask, render_template, request, url_for, redirect, session, jsonify, Response, stream_with_context
 from flask_socketio import SocketIO, emit, join_room
 from flask_cors import CORS
 from collections import defaultdict
@@ -10,7 +10,7 @@ import asyncio
 import mysql.connector
 import locale
 import atexit
-
+import requests
 from interceptar_m3u8 import capturar_m3u8
 from playwright_manager import init_browser, close_browser
 from db_config_chat import get_connection
@@ -298,6 +298,37 @@ def on_mensaje(data):
         conn.commit()
 
     socketio.emit('nuevo_mensaje', {'mensaje': mensaje, 'usuario': user['nombre']}, room=evento_id)
+
+
+
+@app.route('/proxy_stream')
+def proxy_stream():
+    canal_nombre = session.get("canal_nombre")
+    if not canal_nombre:
+        return {"error": "No se encontró el canal en la sesión"}, 400
+
+    filename = f"cache/{canal_nombre}.json"
+
+    if not os.path.exists(filename):
+        return {"error": "No existe el archivo del canal"}, 404
+
+    with open(filename, "r") as f:
+        data = json.load(f)
+
+    m3u8_url = data.get("url")
+    headers = data.get("headers", {})
+
+    if not m3u8_url:
+        return {"error": "URL .m3u8 no válida"}, 500
+
+    # Stream desde el servidor hacia el usuario
+    def generate():
+        with requests.get(m3u8_url, headers=headers, stream=True) as r:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:
+                    yield chunk
+
+    return Response(stream_with_context(generate()), content_type="application/vnd.apple.mpegurl")
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
