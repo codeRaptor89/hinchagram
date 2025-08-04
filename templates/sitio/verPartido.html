@@ -143,47 +143,41 @@
   <!-- STREAM VIDEO -->
   <script>
     const video = document.getElementById('video');
-    const spinnerContainer = document.getElementById('spinner-container');
+const spinnerContainer = document.getElementById('spinner-container');
 
-    async function cargarStream() {
-      spinnerContainer.style.display = 'block';
-      try {
-        const res = await fetch('/api/m3u8');
-        const data = await res.json();
+async function cargarStream() {
+  spinnerContainer.style.display = 'block';
 
-        if (data.error || !data.url) {
-          console.error("❌ Error al obtener el stream:", data.error);
-          spinnerContainer.style.display = 'none';
-          return;
-        }
+  try {
+    // En lugar de hacer fetch a /api/m3u8 para obtener URL,
+    // directamente ponemos la url proxy
+    const url = '/proxy_stream';
 
-        const url = data.url;
-
-        if (Hls.isSupported()) {
-          const hls = new Hls();
-          hls.loadSource(url);
-          hls.attachMedia(video);
-          hls.on(Hls.Events.MANIFEST_PARSED, function () {
-            video.play();
-          });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          video.src = url;
-          video.addEventListener('loadedmetadata', function () {
-            video.play();
-          });
-        }
-
-      } catch (error) {
-        console.error("❌ Error de red:", error);
-        spinnerContainer.style.display = 'none';
-      }
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        video.play();
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = url;
+      video.addEventListener('loadedmetadata', function () {
+        video.play();
+      });
     }
+  } catch (error) {
+    console.error("❌ Error al cargar el stream:", error);
+    spinnerContainer.style.display = 'none';
+  }
+}
 
-    video.addEventListener('playing', () => spinnerContainer.style.display = 'none');
-    video.addEventListener('waiting', () => spinnerContainer.style.display = 'block');
-    video.addEventListener('canplay', () => spinnerContainer.style.display = 'none');
+video.addEventListener('playing', () => spinnerContainer.style.display = 'none');
+video.addEventListener('waiting', () => spinnerContainer.style.display = 'block');
+video.addEventListener('canplay', () => spinnerContainer.style.display = 'none');
 
-    cargarStream();
+cargarStream();
+
   </script>
 
   <!-- CHAT SOCKET.IO -->

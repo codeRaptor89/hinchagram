@@ -21,7 +21,7 @@ CORS(app)
 socketio = SocketIO(app, async_mode='threading')
 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 
-CACHE_EXPIRATION = 60 * 60
+CACHE_EXPIRATION = 60 * 1
 if not os.path.exists("cache"):
     os.makedirs("cache")
 
@@ -311,24 +311,26 @@ def proxy_stream():
         return {"error": "URL .m3u8 no válida"}, 500
 
     try:
-        res = requests.get(m3u8_url, headers=headers, timeout=10)
-        content = res.text
+        r = requests.get(m3u8_url, headers=headers)
+        if r.status_code != 200:
+            return {"error": f"Error al obtener .m3u8: {r.status_code}"}, 500
 
-        # Reescribir URLs absolutas o relativas de segmentos a /proxy_ts
         base_url = m3u8_url.rsplit("/", 1)[0]
-        modified_lines = []
-        for line in content.splitlines():
-            if line.strip().endswith(".ts"):
-                if line.startswith("http"):
-                    full_url = line
-                else:
-                    full_url = f"{base_url}/{line}"
-                line = f"/proxy_ts?segment={full_url}"
-            modified_lines.append(line)
+        modified_m3u8 = []
 
-        return Response("\n".join(modified_lines), content_type="application/vnd.apple.mpegurl")
+        for line in r.text.splitlines():
+            if line.strip().endswith(".ts"):
+                full_segment_url = f"{base_url}/{line.strip()}"
+                proxy_url = url_for('proxy_ts', segment=full_segment_url, _external=True)
+                modified_m3u8.append(proxy_url)
+            else:
+                modified_m3u8.append(line)
+
+        return Response("\n".join(modified_m3u8), content_type="application/vnd.apple.mpegurl")
+
     except Exception as e:
         return {"error": str(e)}, 500
+
 
 @app.route("/proxy_ts")
 def proxy_ts():
