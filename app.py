@@ -1,34 +1,20 @@
-from flask import Flask, render_template, request, url_for, redirect, session, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, url_for, redirect, session, jsonify
 from flask_socketio import SocketIO, emit, join_room
-from flask_cors import CORS
 from collections import defaultdict
 from datetime import datetime
-import json
 import os
-import time
-import asyncio
 import mysql.connector
 import locale
-import atexit
-import requests
-from interceptar_m3u8 import capturar_m3u8
-from playwright_manager import init_browser, close_browser
 from db_config_chat import get_connection
+from dotenv import load_dotenv
+load_dotenv()
+
 
 app = Flask(__name__, static_folder="templates")
 app.secret_key = os.urandom(24)
-CORS(app)
 socketio = SocketIO(app, async_mode='threading')
 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 
-CACHE_EXPIRATION = 60 * 1
-if not os.path.exists("cache"):
-    os.makedirs("cache")
-
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-loop.run_until_complete(init_browser())
-atexit.register(lambda: loop.run_until_complete(close_browser()))
 
 def get_user_by_ip(ip):
     conn = get_connection()
@@ -38,12 +24,14 @@ def get_user_by_ip(ip):
     conn.close()
     return user
 
+
 def create_user(name, ip, timestamp):
     conn = get_connection()
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute("INSERT INTO chat_users (nombre, ip, timestamp) VALUES (%s, %s, %s)", (name, ip, timestamp))
         conn.commit()
     conn.close()
+
 
 def update_user_name(user_id, new_name):
     conn = get_connection()
@@ -53,31 +41,6 @@ def update_user_name(user_id, new_name):
     cursor.close()
     conn.close()
 
-def token_expirado():
-    canal_nombre = session.get('canal_nombre')
-    filename = f"cache/{canal_nombre}.json"
-    if not os.path.exists(filename):
-        return True
-    try:
-        with open(filename, "r") as f:
-            data = json.load(f)
-            timestamp = data.get("timestamp", 0)
-            return time.time() - timestamp > CACHE_EXPIRATION
-    except json.JSONDecodeError:
-        return True
-
-def token_canal_normal_expirado():
-    canal_nombre = session.get('nombre_canal')
-    filename = f"cache/{canal_nombre}.json"
-    if not os.path.exists(filename):
-        return True
-    try:
-        with open(filename, "r") as f:
-            data = json.load(f)
-            timestamp = data.get("timestamp", 0)
-            return time.time() - timestamp > CACHE_EXPIRATION
-    except json.JSONDecodeError:
-        return True
 
 @app.route("/")
 def index():
@@ -126,12 +89,14 @@ def index():
     user_ip = request.remote_addr
     cursor.execute("SELECT nombre FROM chat_users WHERE ip = %s", (user_ip,))
     user = cursor.fetchone()
+    #print(user)
     if user:
         session['username'] = user['nombre']
 
     cursor.close()
     conexion.close()
     return render_template("sitio/index.html", fecha_actual=fecha_actual, partidos=resultado_final, canal=canales)
+
 
 @app.route('/verPartido', methods=['GET', 'POST'])
 def verPartido():
@@ -150,50 +115,25 @@ def verPartido():
         session['evento_id'] = event_id
 
     canal_url = session.get('source_url')
-    canal_nombre = session.get('canal_nombre')
     nombre_evento = session.get('nombre_evento')
     event_id = session.get('evento_id')
 
-    if not canal_url or not canal_nombre or not event_id:
+    if not canal_url or not event_id:
         return "Faltan parámetros", 400
 
     user_ip = request.remote_addr
     user = get_user_by_ip(user_ip)
     username = user['nombre'] if user else None
+    #print(username)
 
     return render_template("sitio/verPartido.html",
         evento=nombre_evento,
         user=user,
         username=username,
         event_id=event_id,
+        canal_url=canal_url
     )
 
-@app.route("/api/m3u8")
-def obtener_m3u8():
-    source_url = session.get('source_url')
-    canal_nombre = session.get('canal_nombre')
-
-    if not source_url:
-        return {"error": "No se proporcionó URL"}, 400
-
-    filename = f"cache/{canal_nombre}.json"
-
-    if token_expirado() or not os.path.exists(filename):
-        print("🔄 Token expirado o no existe. Renovando...")
-        data = loop.run_until_complete(capturar_m3u8(source_url))
-        if not data:
-            return {"error": "❌ No se pudo capturar el stream"}, 500
-        with open(filename, "w") as f:
-            json.dump({**data, "timestamp": time.time()}, f)
-    else:
-        try:
-            with open(filename, "r") as f:
-                data = json.load(f)
-                print("✅ Usando caché")
-        except Exception as e:
-            return {"error": f"❌ Error al leer caché: {e}"}, 500
-
-    return {"url": data["url"]}
 
 @app.route('/verCanal', methods=['GET', 'POST'])
 def verCanal():
@@ -211,40 +151,13 @@ def verCanal():
             session['canal_imagen'] = canal_imagen
 
     canal_url = session.get('url_canal')
-    canal_nombre = session.get('nombre_canal')
     canal_imagen = session.get('canal_imagen')
 
-    if not canal_url or not canal_nombre:
+    if not canal_url:
         return "Faltan parámetros", 400
 
-    return render_template("sitio/canal.html", imagen=canal_imagen)
+    return render_template("sitio/canal.html", imagen=canal_imagen, canal_url=canal_url)
 
-@app.route("/canal_normal")
-def obtener_canal_m3u8():
-    canal_url = session.get('url_canal')
-    canal_nombre = session.get('nombre_canal')
-
-    if not canal_url:
-        return {"error": "No se proporcionó URL"}, 400
-
-    filename = f"cache/{canal_nombre}.json"
-
-    if token_canal_normal_expirado() or not os.path.exists(filename):
-        print("🔄 Token expirado o no existe. Renovando...")
-        data = loop.run_until_complete(capturar_m3u8(canal_url))
-        if not data:
-            return {"error": "❌ No se pudo capturar el stream"}, 500
-        with open(filename, "w") as f:
-            json.dump({**data, "timestamp": time.time()}, f)
-    else:
-        try:
-            with open(filename, "r") as f:
-                data = json.load(f)
-                print("✅ Usando caché")
-        except Exception as e:
-            return {"error": f"❌ Error al leer caché: {e}"}, 500
-
-    return {"url": data["url"]}
 
 @app.route("/api/mensajes")
 def api_mensajes():
@@ -259,99 +172,113 @@ def api_mensajes():
         FROM mensajes m
         LEFT JOIN chat_users u ON m.usuario_id = u.id
         WHERE m.evento_id = %s
-        ORDER BY m.timestamp ASC
+        ORDER BY m.timestamp DESC
         LIMIT 100;
         """, (evento_id,))
         mensajes = cursor.fetchall()
     conn.close()
     return jsonify(mensajes)
 
+
 @socketio.on('join')
 def on_join(data):
     join_room(data['event_id'])
+
 
 @socketio.on('mensaje')
 def on_mensaje(data):
     user_ip = request.remote_addr
     user = get_user_by_ip(user_ip)
-    user_id = user['id'] if user else None
+    print(f"IP del usuario: {user_ip}")
+    print(f"Usuario obtenido: {user}")
 
+    user_id = user['id'] if user else None
     if not user_id:
         emit('error', {'msg': 'Usuario no encontrado'})
+        print("No se encontró usuario para la IP")
         return
 
     evento_id = data.get('event_id')
     mensaje = data.get('mensaje')
 
-    conn = get_connection()
-    with conn.cursor() as cursor:
-        cursor.execute("INSERT INTO mensajes (evento_id, usuario_id, mensaje, timestamp) VALUES (%s, %s, %s, NOW())",
-                       (evento_id, user_id, mensaje))
-        conn.commit()
+    print(f"Evento ID recibido: {evento_id}")
+    print(f"Mensaje recibido: {mensaje}")
+
+    if not evento_id or not mensaje:
+        emit('error', {'msg': 'Faltan datos: evento_id o mensaje'})
+        print("Faltan datos para insertar el mensaje")
+        return
+
+    try:
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO mensajes (evento_id, usuario_id, mensaje, timestamp) VALUES (%s, %s, %s, NOW())",
+                (evento_id, user_id, mensaje)
+            )
+            conn.commit()
+        print("Mensaje insertado correctamente en la base de datos")
+    except Exception as e:
+        print(f"Error al insertar el mensaje en la base de datos: {e}")
+        emit('error', {'msg': 'Error al guardar el mensaje'})
+        return
 
     socketio.emit('nuevo_mensaje', {'mensaje': mensaje, 'usuario': user['nombre']}, room=evento_id)
 
-@app.route('/proxy_stream')
-def proxy_stream():
-    canal_nombre = session.get("canal_nombre")
-    if not canal_nombre:
-        return {"error": "No se encontró el canal en la sesión"}, 400
+from flask import jsonify, request
+from datetime import datetime, timedelta
 
-    filename = f"cache/{canal_nombre}.json"
-    if not os.path.exists(filename):
-        return {"error": "No existe el archivo del canal"}, 404
+@app.route("/api/registrar_nombre", methods=["POST"])
+def registrar_nombre():
+    data = request.get_json()
+    nombre = data.get("nombre", "").strip()
+    user_ip = request.remote_addr
 
-    with open(filename, "r") as f:
-        data = json.load(f)
+    if not nombre:
+        return jsonify({"status": "error", "mensaje": "El nombre no puede estar vacío"}), 400
 
-    m3u8_url = data.get("url")
-    headers = data.get("headers", {})
-
-    if not m3u8_url:
-        return {"error": "URL .m3u8 no válida"}, 500
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
 
     try:
-        r = requests.get(m3u8_url, headers=headers)
-        if r.status_code != 200:
-            return {"error": f"Error al obtener .m3u8: {r.status_code}"}, 500
+        # Verifica si el nombre ya existe para otro usuario
+        cursor.execute("SELECT * FROM chat_users WHERE nombre = %s AND ip != %s", (nombre, user_ip))
+        nombre_existente = cursor.fetchone()
+        if nombre_existente:
+            return jsonify({"status": "error", "mensaje": "Este nombre ya está en uso por otro usuario"}), 400
 
-        base_url = m3u8_url.rsplit("/", 1)[0]
-        modified_m3u8 = []
+        # Obtiene el usuario actual por IP
+        cursor.execute("SELECT * FROM chat_users WHERE ip = %s", (user_ip,))
+        user = cursor.fetchone()
 
-        for line in r.text.splitlines():
-            if line.strip().endswith(".ts"):
-                full_segment_url = f"{base_url}/{line.strip()}"
-                proxy_url = url_for('proxy_ts', segment=full_segment_url, _external=True)
-                modified_m3u8.append(proxy_url)
-            else:
-                modified_m3u8.append(line)
+        hoy = datetime.now().date()
 
-        return Response("\n".join(modified_m3u8), content_type="application/vnd.apple.mpegurl")
+        if user:
+            # Ya hay usuario registrado. Verifica si cambió nombre hoy.
+            timestamp = user["timestamp"]
+            if timestamp.date() == hoy:
+                return jsonify({"status": "error", "mensaje": "Ya cambiaste tu nombre hoy"}), 400
+
+            # Actualiza nombre y timestamp
+            cursor.execute("UPDATE chat_users SET nombre = %s, timestamp = %s WHERE id = %s",
+                           (nombre, datetime.now(), user["id"]))
+        else:
+            # Nuevo usuario
+            cursor.execute("INSERT INTO chat_users (nombre, ip, timestamp) VALUES (%s, %s, %s)",
+                           (nombre, user_ip, datetime.now()))
+
+        conn.commit()
+        session['username'] = nombre
+
+        return jsonify({"status": "ok"})
 
     except Exception as e:
-        return {"error": str(e)}, 500
+        print(f"Error al registrar nombre: {e}")
+        return jsonify({"status": "error", "mensaje": "Fallo al registrar nombre"}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
-
-@app.route("/proxy_ts")
-def proxy_ts():
-    segment_url = request.args.get("segment")
-    canal_nombre = session.get("canal_nombre")
-    if not segment_url or not canal_nombre:
-        return {"error": "Datos faltantes"}, 400
-
-    filename = f"cache/{canal_nombre}.json"
-    if not os.path.exists(filename):
-        return {"error": "Stream no encontrado"}, 404
-
-    with open(filename, "r") as f:
-        data = json.load(f)
-    
-    headers = data.get("headers", {})
-    try:
-        r = requests.get(segment_url, headers=headers, stream=True, timeout=10)
-        return Response(stream_with_context(r.iter_content(1024)), content_type=r.headers.get("Content-Type"))
-    except Exception as e:
-        return {"error": str(e)}, 500
 
 
 if __name__ == '__main__':

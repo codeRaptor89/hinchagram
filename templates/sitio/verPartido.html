@@ -1,192 +1,91 @@
 {% include 'sitio/cabecera.html' %}
 
 <style>
-  /* Estilos del reproductor de video */
-  .video-wrapper {
+  /* Contenedor del iframe */
+  .iframe-wrapper {
     width: 100%;
-    position: relative;
     max-width: 960px;
+    aspect-ratio: 16 / 9;
+    margin: 0 auto 30px;
     background-color: black;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: 0 auto;
-  }
-
-  .card-custom {
-    width: 100%;
-    max-width: 960px;
-    margin: 0 auto;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   }
 
-  video {
+  iframe {
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    display: block;
+    border: none;
   }
 
-  #spinner-container {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    z-index: 10;
-    color: #ffffff;
-    font-family: sans-serif;
-    display: none;
-    margin-bottom: 1rem;
-    pointer-events: none;
-  }
-
-  #spinner {
-    margin: 0 auto 10px;
-    border: 6px solid #f3f3f3;
-    border-top: 6px solid #3498db;
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  .titulo {
-    text-align: center;
-    margin-top: 10px;
-    font-size: 1.8rem;
-  }
-
-  /* Estilos para el formulario de cambio de nombre */
-  #changeNameContainer {
-    text-align: center;
+  /* Chat */
+  #chat-container {
+    max-width: 960px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     padding: 20px;
-    background: #fff;
-    border-radius: 8px;
-    margin-top: 20px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
+
+#chat {
+  height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  background: #f9f9f9;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column; /* normal, no invertido */
+  padding: 10px;
+}
 </style>
 
-<body style="margin: 0; padding: 30px 10px; background: #f0f2f5; font-family: Arial, sans-serif;">
-  <div style="max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px;">
+<body style="font-family: Arial, sans-serif; background: #f0f2f5; margin: 0; padding: 30px 10px;">
 
-    {% if evento %}
-    <h1 class="titulo">{{evento}}</h1>
-    {% endif %}
-
-    <!-- Video -->
-    <div class="card card-custom shadow">
-      <div class="card-body text-center">
-        <div class="video-wrapper">
-          <div id="spinner-container">
-            <div id="spinner"></div>
-            <p>🔄 Por favor espere 15 segundos mientras se carga...</p>
-          </div>
-          <video id="video" controls autoplay muted width="640" height="360" class="mt-3"></video>
-        </div>
-      </div>
-    </div>
-
-    <!-- CHAT HTML -->
-    <div
-      style="width: 100%; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-      <h3 style="margin-top: 0; text-align: center; color: #333;">Chat del evento</h3>
-
-      <!-- Área de mensajes -->
-      <div id="chat"
-        style="height: 300px; border: 1px solid #ccc; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px; display: flex; flex-direction: column-reverse;">
-      </div>
-
-      <!-- Input y botón para enviar -->
-      <div style="margin-top: 10px; display: flex; gap: 10px;">
-        <input type="text" id="message" placeholder="Escribe tu mensaje..."
-          style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px;" disabled>
-        <button onclick="sendMessage()" id="sendBtn"
-          style="padding: 10px 15px; border: none; background-color: #007BFF; color: white; border-radius: 5px; cursor: pointer;"
-          disabled>Enviar</button>
-      </div>
-    </div>
-
-    <!-- Cambio de nombre -->
-    <div id="changeNameContainer">
-      <h3>Cambiar nombre (puedes hacerlo solo una vez al día)</h3>
-      <input type="text" id="nameInput" placeholder="Nuevo nombre"
-        style="padding: 10px; width: 80%; border: 1px solid #ccc; border-radius: 5px;">
-      <br><br>
-      <button onclick="registrarNombre()"
-        style="padding: 10px 20px; border: none; background-color: #28a745; color: white; border-radius: 5px; cursor: pointer;">Guardar</button>
-    </div>
+  <!-- Iframe con el video -->
+  <div class="iframe-wrapper">
+    <iframe src="{{ canal_url }}" allowfullscreen allow="autoplay; encrypted-media"></iframe>
   </div>
 
-  <!-- Indicador de carga, al principio estará oculto -->
-  <div id="loading" style="display: none;">
-    <p>Registrando...</p>
+  <!-- Chat -->
+  <div id="chat-container">
+    <h3 style="text-align:center; margin-top:0;">Chat del evento</h3>
+
+    <div id="chat"></div>
+
+    <div style="margin-top:10px; display:flex; gap:10px;">
+      <input type="text" id="message" placeholder="Escribe tu mensaje..." disabled
+        style="flex:1; padding:10px; border:1px solid #ccc; border-radius:5px;">
+      <button id="sendBtn" onclick="sendMessage()" disabled
+        style="padding:10px 15px; background:#007BFF; color:#fff; border:none; border-radius:5px; cursor:pointer;">
+        Enviar
+      </button>
+    </div>
+
+    <div id="changeNameContainer" style="text-align:center; margin-top:20px;">
+      <h3>Cambiar nombre (puedes hacerlo solo una vez al día)</h3>
+      <input type="text" id="nameInput" placeholder="Nuevo nombre"
+        style="padding:10px; width:80%; border:1px solid #ccc; border-radius:5px;">
+      <br><br>
+      <button onclick="registrarNombre()"
+        style="padding:10px 20px; background:#28a745; color:#fff; border:none; border-radius:5px; cursor:pointer;">
+        Guardar
+      </button>
+    </div>
   </div>
 
   <!-- Librerías externas -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 
-  <!-- STREAM VIDEO -->
-  <script>
-    const video = document.getElementById('video');
-const spinnerContainer = document.getElementById('spinner-container');
-
-async function cargarStream() {
-  spinnerContainer.style.display = 'block';
-
-  try {
-    // En lugar de hacer fetch a /api/m3u8 para obtener URL,
-    // directamente ponemos la url proxy
-    const url = '/proxy_stream';
-
-    if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        video.play();
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url;
-      video.addEventListener('loadedmetadata', function () {
-        video.play();
-      });
-    }
-  } catch (error) {
-    console.error("❌ Error al cargar el stream:", error);
-    spinnerContainer.style.display = 'none';
-  }
-}
-
-video.addEventListener('playing', () => spinnerContainer.style.display = 'none');
-video.addEventListener('waiting', () => spinnerContainer.style.display = 'block');
-video.addEventListener('canplay', () => spinnerContainer.style.display = 'none');
-
-cargarStream();
-
-  </script>
-
-  <!-- CHAT SOCKET.IO -->
+  <!-- Chat JS (igual que antes) -->
   <script>
     let lastChanged = '{{ last_changed }}';
     let socket = io();
     let username = '{{ username }}';
 
     document.addEventListener("DOMContentLoaded", function () {
+      console.log("Valor de username:", username);
       if (username && username.trim() !== '' && username !== 'None' && username !== 'Null') {
         habilitarInputYBoton();
       } else {
@@ -195,7 +94,7 @@ cargarStream();
           <input type="text" id="nameInput" placeholder="Nuevo nombre"
             style="padding: 10px; width: 80%; border: 1px solid #ccc; border-radius: 5px;">
           <br><br>
-          <button onclick="registrarNombre()" style="padding: 10px 20px; border: none; background-color: #28a745; color: white; border-radius: 5px; cursor: pointer;">Guardar</button>
+          <button onclick="registrarNombre()" style="padding: 10px 20px; background:#28a745; color:#fff; border:none; border-radius:5px; cursor:pointer;">Guardar</button>
         `;
         document.getElementById("message").disabled = true;
         document.getElementById("sendBtn").disabled = true;
@@ -211,8 +110,8 @@ cargarStream();
       obtenerMensajes();
       socket.emit('join', { event_id: '{{ event_id }}' });
 
-      socket.on('message', function (data) {
-        appendMessage(data.user || 'Anónimo', data.message || '');
+      socket.on('nuevo_mensaje', function (data) {
+        appendMessage(data.usuario || 'Anónimo', data.mensaje || '');
       });
 
       document.getElementById('message').addEventListener('keypress', function (event) {
@@ -227,8 +126,7 @@ cargarStream();
       fetch(`/api/mensajes?evento_id={{ event_id }}`)
         .then(response => response.json())
         .then(data => {
-                   if (Array.isArray(data)) {
-            // Mostrar mensajes en orden descendente (últimos primero)
+          if (Array.isArray(data)) {
             data.reverse().forEach(m => appendMessage(m.nombre || 'Anónimo', m.mensaje));
           } else {
             console.error('Error al cargar los mensajes:', data.error);
@@ -256,8 +154,11 @@ cargarStream();
       const text = document.createTextNode(message);
       msgContainer.appendChild(text);
 
-      // Insertar el mensaje al principio (nuevo arriba)
-      chat.insertBefore(msgContainer, chat.firstChild);
+ // Agrega mensaje arriba (antes del primer hijo)
+  chat.insertBefore(msgContainer, chat.firstChild);
+
+  // Mantener scroll arriba para que el mensaje nuevo se vea
+  chat.scrollTop = 0;
     }
 
     function habilitarInputYBoton() {
@@ -273,7 +174,7 @@ cargarStream();
           <input type="text" id="nameInput" placeholder="Nuevo nombre"
             style="padding: 10px; width: 80%; border: 1px solid #ccc; border-radius: 5px;">
           <br><br>
-          <button onclick="registrarNombre()" style="padding: 10px 20px; border: none; background-color: #28a745; color: white; border-radius: 5px; cursor: pointer;">Guardar</button>
+          <button onclick="registrarNombre()" style="padding: 10px 20px; background:#28a745; color:#fff; border:none; border-radius:5px; cursor:pointer;">Guardar</button>
         `;
         return;
       }
@@ -285,9 +186,9 @@ cargarStream();
         return;
       }
 
-      socket.emit('message', {
+      socket.emit('mensaje', {
         user: username,
-        message: message,
+        mensaje: message,
         event_id: '{{ event_id }}'
       });
 
@@ -310,9 +211,6 @@ cargarStream();
         return;
       }
 
-      const loadingElement = document.getElementById('loading');
-      if (loadingElement) loadingElement.style.display = 'block';
-
       fetch("/api/registrar_nombre", {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
@@ -320,8 +218,6 @@ cargarStream();
       })
         .then(res => res.json())
         .then(data => {
-          if (loadingElement) loadingElement.style.display = 'none';
-
           if (data.status === 'ok') {
             username = nombre;
             habilitarInputYBoton();
@@ -332,7 +228,6 @@ cargarStream();
           }
         })
         .catch(err => {
-          if (loadingElement) loadingElement.style.display = 'none';
           alert("Fallo al registrar nombre");
           console.error(err);
         });
@@ -341,4 +236,3 @@ cargarStream();
 </body>
 
 {% include 'sitio/pie.html' %}
-
