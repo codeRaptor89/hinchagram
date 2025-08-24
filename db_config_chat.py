@@ -2,7 +2,8 @@ import mysql.connector
 import os
 from dotenv import load_dotenv
 
-load_dotenv()  # Carga las variables desde .env
+load_dotenv()  # Carga las variables desde .envgit commit -m "Remueve .env del control de versiones"
+
 
 def get_connection():
     return mysql.connector.connect(
