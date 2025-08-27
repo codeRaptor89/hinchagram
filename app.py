@@ -12,7 +12,7 @@ load_dotenv()
 
 app = Flask(__name__, static_folder="templates")
 app.secret_key = os.urandom(24)
-socketio = SocketIO(app, async_mode='threading')
+socketio = SocketIO(app, async_mode='eventlet')
 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 
 
@@ -209,12 +209,14 @@ def on_mensaje(data):
         print("Faltan datos para insertar el mensaje")
         return
 
+    fecha_actual = datetime.now()  # 2. Obtener la fecha y hora actual
+
     try:
         conn = get_connection()
         with conn.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO mensajes (evento_id, usuario_id, mensaje, timestamp) VALUES (%s, %s, %s, NOW())",
-                (evento_id, user_id, mensaje)
+                "INSERT INTO mensajes (evento_id, usuario_id, mensaje, timestamp) VALUES (%s, %s, %s, %s)",
+                (evento_id, user_id, mensaje, fecha_actual)
             )
             conn.commit()
         print("Mensaje insertado correctamente en la base de datos")
