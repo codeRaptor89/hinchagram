@@ -51,12 +51,12 @@ def index():
     anio_actual = fecha_actual.year
 
     conexion = mysql.connector.connect(
-        host="miappdb.c7u6giqeygpc.us-east-2.rds.amazonaws.com",
-        user="admin",
-        password="Lunita1808",
-        database='futbol',
+        host=os.environ.get("DB_HOST"),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        database=os.environ.get("DB_NAME"),
         charset='utf8mb4',
-        port=3306
+        port=int(os.environ.get("DB_PORT", 3306))
     )
     cursor = conexion.cursor(dictionary=True)
 
@@ -86,7 +86,7 @@ def index():
     cursor.execute("SELECT * FROM canales")
     canales = cursor.fetchall()
 
-    user_ip = request.remote_addr
+    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     cursor.execute("SELECT nombre FROM chat_users WHERE ip = %s", (user_ip,))
     user = cursor.fetchone()
     #print(user)
