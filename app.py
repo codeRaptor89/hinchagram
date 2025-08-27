@@ -27,6 +27,10 @@ def get_user_by_ip(ip):
     conn.close()
     return user
 
+@app.route("/verip")
+def ver_ip():
+    return f"IP del cliente es: {request.remote_addr}"
+
 
 def create_user(name, ip, timestamp):
     conn = get_connection()
