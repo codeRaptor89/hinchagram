@@ -121,7 +121,7 @@ def verPartido():
     if not canal_url or not event_id:
         return "Faltan parámetros", 400
 
-    user_ip = request.remote_addr
+    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     user = get_user_by_ip(user_ip)
     username = user['nombre'] if user else None
     #print(username)
@@ -187,7 +187,7 @@ def on_join(data):
 
 @socketio.on('mensaje')
 def on_mensaje(data):
-    user_ip = request.remote_addr
+    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     user = get_user_by_ip(user_ip)
     print(f"IP del usuario: {user_ip}")
     print(f"Usuario obtenido: {user}")
@@ -234,7 +234,7 @@ from datetime import datetime, timedelta
 def registrar_nombre():
     data = request.get_json()
     nombre = data.get("nombre", "").strip()
-    user_ip = request.remote_addr
+    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
 
     if not nombre:
         return jsonify({"status": "error", "mensaje": "El nombre no puede estar vacío"}), 400
