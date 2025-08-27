@@ -6,6 +6,7 @@ import os
 import mysql.connector
 import locale
 from db_config_chat import get_connection
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -14,6 +15,8 @@ app = Flask(__name__, static_folder="templates")
 app.secret_key = os.urandom(24)
 socketio = SocketIO(app, async_mode='eventlet')
 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+# Agrega ProxyFix indicando 1 proxy delante (Nginx)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 
 def get_user_by_ip(ip):
@@ -121,7 +124,7 @@ def verPartido():
     if not canal_url or not event_id:
         return "Faltan parámetros", 400
 
-    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    user_ip = request.remote_addr
     user = get_user_by_ip(user_ip)
     username = user['nombre'] if user else None
     #print(username)
@@ -187,7 +190,7 @@ def on_join(data):
 
 @socketio.on('mensaje')
 def on_mensaje(data):
-    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    user_ip = request.remote_addr
     user = get_user_by_ip(user_ip)
     print(f"IP del usuario: {user_ip}")
     print(f"Usuario obtenido: {user}")
@@ -234,7 +237,7 @@ from datetime import datetime, timedelta
 def registrar_nombre():
     data = request.get_json()
     nombre = data.get("nombre", "").strip()
-    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    user_ip = request.remote_addr
 
     if not nombre:
         return jsonify({"status": "error", "mensaje": "El nombre no puede estar vacío"}), 400
