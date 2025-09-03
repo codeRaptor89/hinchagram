@@ -39,9 +39,25 @@
   flex-direction: column; /* normal, no invertido */
   padding: 10px;
 }
+
+  /* Título del evento */
+  .titulo-evento {
+    max-width: 960px;
+    margin: 0 auto 15px;
+    text-align: center;
+    font-size: 1.5rem;
+    font-weight: 100;
+    color: #333;
+    font-family: Arial, sans-serif;
+  } 
 </style>
 
 <body style="font-family: Arial, sans-serif; background: #f0f2f5; margin: 0; padding: 30px 10px;">
+
+    <!-- Título del evento -->
+  <div class="titulo-evento">
+    {{ evento }}
+  </div>
 
   <!-- Iframe con el video -->
   <div class="iframe-wrapper">

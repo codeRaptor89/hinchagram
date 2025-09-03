@@ -5,149 +5,142 @@
     text-align: center;
     margin-top: 20px;
   }
+
+
+  .card-clickable {
+    border: 2px solid #ffffff;
+    border-radius: 15px;
+    background-color: #1b5e75;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    aspect-ratio: 4 / 3; /* ✅ Proporción fija de la tarjeta */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: transform 0.2s ease-in-out;
+    padding: 10px;
+  }
+
+  .card-clickable:hover {
+    transform: scale(1.05);
+  }
+
+.user-image {
+  max-width: 100%;
+  max-height: 70%;
+  object-fit: contain;
+  margin-bottom: 10px;
+  background-color: white; /* Fondo blanco */
+}
+
+  .user-profession {
+    font-weight: 600;
+    font-size: 14px;
+    text-align: center;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .row-cols-1 .col,
+  .row-cols-sm-2 .col,
+  .row-cols-md-3 .col,
+  .row-cols-lg-4 .col,
+  .row-cols-xl-5 .col {
+    display: flex;
+  }
+
+  .card {
+    width: 100%;
+  }
+
+
+
 </style>
 
 <header>
-
-  <!-- place navbar here -->
-  <nav class="navbar navbar-light bg-light">
-
-
+  <!-- Navbar -->
+  <nav class="navbar navbar-light bg-light px-3">
     <a class="navbar-brand d-flex align-items-center me-auto" href="/">
-      <img src="/templates/img/logo.png" alt="Logo de mi sitio" width="60" height="60" class="me-2">
+      <img src="/templates/img/logo.png" alt="Logo" width="60" height="60" class="me-2">
     </a>
 
-    <!-- 🔵 Banderas alineadas a la derecha -->
-    <div class="d-flex gap-2">
-      <a class="navbar-brand" href="#">
-        <img src="/templates/banderas/Argentina.png" alt="" width="30" height="24">
-      </a>
-
-      <a class="navbar-brand" href="#">
-        <img src="/templates/banderas/Espana.png" alt="" width="30" height="24">
-      </a>
-
-      <a class="navbar-brand" href="#">
-        <img src="/templates/banderas/Ecuador.png" alt="" width="30" height="24">
-      </a>
-
-      <a class="navbar-brand" href="#">
-        <img src="/templates/banderas/Peru.png" alt="" width="30" height="24">
-      </a>
-
-      <a class="navbar-brand" href="#">
-        <img src="/templates/banderas/Uruguay.png" alt="" width="30" height="24">
-      </a>
-
-      <a class="navbar-brand" href="#">
-        <img src="/templates/banderas/Colombia.png" alt="" width="30" height="24">
-      </a>
-
-      <a class="navbar-brand" href="#">
-        <img src="/templates/banderas/Mexico.png" alt="" width="30" height="24">
-      </a>
-
-      <a class="navbar-brand" href="#">
-        <img src="/templates/banderas/Chile.png" alt="" width="30" height="24">
-      </a>
-
+    <div class="d-flex flex-wrap gap-2 ms-auto">
+      <a class="navbar-brand" href="#"><img src="/templates/banderas/Argentina.png" alt="Argentina" width="30" height="24"></a>
+      <a class="navbar-brand" href="#"><img src="/templates/banderas/Espana.png" alt="España" width="30" height="24"></a>
+      <a class="navbar-brand" href="#"><img src="/templates/banderas/Ecuador.png" alt="Ecuador" width="30" height="24"></a>
+      <a class="navbar-brand" href="#"><img src="/templates/banderas/Peru.png" alt="Perú" width="30" height="24"></a>
+      <a class="navbar-brand" href="#"><img src="/templates/banderas/Uruguay.png" alt="Uruguay" width="30" height="24"></a>
+      <a class="navbar-brand" href="#"><img src="/templates/banderas/Colombia.png" alt="Colombia" width="30" height="24"></a>
+      <a class="navbar-brand" href="#"><img src="/templates/banderas/Mexico.png" alt="México" width="30" height="24"></a>
+      <a class="navbar-brand" href="#"><img src="/templates/banderas/Chile.png" alt="Chile" width="30" height="24"></a>
     </div>
   </nav>
-
 </header>
 
-<main>
+<main class="container-fluid">
 
   {% if fecha_actual %}
-
-  <h5 class="Titulo_agenda">Eventos del {{fecha_actual.day}} de {{ fecha_actual.strftime('%B').capitalize() }}
-    {{fecha_actual.year}}</h5>
-
+  <h5 class="Titulo_agenda">
+    Eventos del {{fecha_actual.day}} de {{ fecha_actual.strftime('%B').capitalize() }} {{fecha_actual.year}}
+  </h5>
   {% endif %}
 
-  <div class="card" style="margin: 20px;">
-
-    <div class="card body" style="margin: 20px;">
-      <!-- Contenedor principal del acordeón -->
+  <!-- Acordeón de eventos -->
+  <div class="card my-4">
+    <div class="card-body">
       <div class="accordion" id="accordionExample">
 
-        <!-- Bucle sobre la lista de partidos -->
         {% for partido in partidos %}
-        {% set index = loop.index %} <!-- Usamos el índice del bucle para generar IDs únicos -->
-        <!-- Cada ítem del acordeón -->
+        {% set index = loop.index %}
         <div class="accordion-item">
-          <!-- Encabezado del acordeón con botón colapsable -->
-          <h2 class="accordion-header" id="headingOne">
+          <h2 class="accordion-header" id="heading{{ index }}">
             <button class="accordion-button" style="background-color: rgba(165, 227, 255, 0.5);" type="button"
-              data-bs-toggle="collapse" data-bs-target="#collapse{{ index }}" { Apunta al contenido a colapsar }
-              aria-expanded="true" aria-controls="collapse{{ index }}">
-              {{ partido.evento }} <!-- Muestra el nombre del evento -->
+              data-bs-toggle="collapse" data-bs-target="#collapse{{ index }}" aria-expanded="true"
+              aria-controls="collapse{{ index }}">
+              {{ partido.evento }}
             </button>
           </h2>
-          <!-- Contenido colapsable del acordeón -->
-          <div id="collapse{{ index }}" class="accordion-collapse collapse" { Por defecto cerrado }
+
+          <div id="collapse{{ index }}" class="accordion-collapse collapse"
             aria-labelledby="heading{{ index }}" data-bs-parent="#accordionExample">
-            <!-- Garantiza que solo uno se abra a la vez -->
             <div class="accordion-body">
-
-              <!-- Lista horizontal de botones de canales -->
-              <ul style="list-style: none; padding: 0; margin: 0; display: flex;">
-
-                <!-- Bucle sobre los canales del partido -->
+              <ul class="d-flex flex-wrap list-unstyled gap-2">
                 {% for canal in partido.canales %}
-                <li class="nav-item" style="margin-right: 5px;">
-
-                  <!-- Formulario para enviar los datos del canal -->
-                  <form action="{{ url_for('verPartido') }}" method="post" style="display:inline;">
-                    <!-- Campos ocultos con la información que se envía -->
+                <li>
+                  <form action="{{ url_for('verPartido') }}" method="post" class="d-inline">
                     <input type="hidden" name="canal_url" value="{{ canal.url }}">
                     <input type="hidden" name="canal" value="{{ canal.nombre_canal }}">
                     <input type="hidden" name="nombre_evento" value="{{ partido.evento }}">
                     <input type="hidden" name="evento_id" value="{{ partido.id }}">
-                    <!-- Botón que representa el canal -->
-                    <button type="submit" class="btn btn-outline-primary">{{ canal.nombre_canal }}</button>
+                    <button type="submit" class="btn btn-outline-primary btn-sm">{{ canal.nombre_canal }}</button>
                   </form>
-
                 </li>
                 {% endfor %}
               </ul>
-
             </div>
           </div>
         </div>
-
         {% endfor %}
 
       </div>
     </div>
-
   </div>
 
-  {# <a class="nav-link active"
-    href="{{ url_for('verPartido') }}?canal_url={{ canal.url | urlencode }}&canal={{ canal.nombre_canal | urlencode }}"
-    aria-current="page">
-    <button type="button" class="btn btn-outline-primary">{{ canal.nombre_canal }}</button>
-  </a> #}
-
-
-  <!-- TABLA DE CANALES -->
+  <!-- Tabla de canales -->
   <div class="container mt-5">
-    <h2>Tabla de Tarjetas</h2>
-    <div class="row row-cols-1 row-cols-md-5 g-4">
+    <h2 class="text-center mb-4">Tabla de Tarjetas</h2>
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5 g-4">
       {% for canales in canal %}
-      <!-- Formulario para enviar los datos del canal -->
-      <form action="{{ url_for('verCanal') }}" method="post" style="display:inline;">
-        <!-- Campos ocultos con la información que se envía -->
+      <form action="{{ url_for('verCanal') }}" method="post" class="d-inline">
         <input type="hidden" name="canal_url" value="{{ canales.url }}">
         <input type="hidden" name="canal" value="{{ canales.nombre }}">
         <input type="hidden" name="imagen" value="{{ canales.imagen }}">
 
-        <div class="col mb-4">
-          <div class="card-list">
-            <div class="card-item card-clickable">
-              <img src="{{ canales.imagen }}" width="300" height="300" alt="{{ canales.nombre }}" class="user-image">
-              <p class="user-profession">{{ canales.nombre }}</p>
-            </div>
+        <div class="col">
+          <div class="card card-clickable h-100 text-center p-2">
+            <img src="{{ canales.imagen }}" class="user-image img-fluid" alt="{{ canales.nombre }}">
+            <p class="user-profession">{{ canales.nombre }}</p>
           </div>
         </div>
       </form>
@@ -155,13 +148,12 @@
     </div>
   </div>
 
-  <!-- JavaScript para hacer clic en la tarjeta y enviar el formulario -->
+  <!-- JS para clic en las tarjetas -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const clickableCards = document.querySelectorAll('.card-clickable');
-
       clickableCards.forEach(function (card) {
-        card.style.cursor = 'pointer'; // Visualmente se ve como clicable
+        card.style.cursor = 'pointer';
         card.addEventListener('click', function () {
           const form = card.closest('form');
           if (form) form.submit();
@@ -169,7 +161,6 @@
       });
     });
   </script>
-
 
 </main>
 
