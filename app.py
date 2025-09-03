@@ -9,6 +9,12 @@ from db_config_chat import get_connection
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 load_dotenv()
+from itsdangerous import URLSafeSerializer
+
+# Usa una clave secreta (mantén esto en secreto en producción)
+SECRET_KEY = 'mi_clave_ultra_secreta'
+
+serializer = URLSafeSerializer(SECRET_KEY)
 
 
 app = Flask(__name__, static_folder="templates")
@@ -18,6 +24,21 @@ locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 # Agrega ProxyFix indicando 1 proxy delante (Nginx)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
+def generar_token(event_id, canal_nombre):
+    """
+    Genera un token único a partir del ID del evento y el nombre del canal.
+    """
+    data = {
+        'event_id': str(event_id),
+        'canal_nombre': canal_nombre.lower().replace(" ", "_")
+    }
+    return serializer.dumps(data)
+
+def obtener_datos_desde_token(token):
+    """
+    Decodifica el token para obtener el diccionario con event_id y canal_nombre.
+    """
+    return serializer.loads(token)
 
 def get_user_by_ip(ip):
     conn = get_connection()
@@ -105,65 +126,156 @@ def index():
     return render_template("sitio/index.html", fecha_actual=fecha_actual, partidos=resultado_final, canal=canales)
 
 
-@app.route('/verPartido', methods=['GET', 'POST'])
+@app.route('/verPartido', methods=['POST'])
 def verPartido():
     if not session.get('logged_in'):
         return redirect(url_for('index'))
 
-    if request.method == 'POST':
-        canal_url = request.form.get('canal_url')
-        canal_nombre = request.form.get('canal')
-        nombre_evento = request.form.get('nombre_evento')
-        event_id = request.form.get('evento_id')
+    canal_url = request.form.get('canal_url')
+    canal_nombre = request.form.get('canal')
+    nombre_evento = request.form.get('nombre_evento')
+    event_id = request.form.get('evento_id')
 
-        session['source_url'] = canal_url
-        session['canal_nombre'] = canal_nombre.lower().replace(" ", "_") if canal_nombre else None
-        session['nombre_evento'] = nombre_evento
-        session['evento_id'] = event_id
+    # Guardar en sesión
+    session['source_url'] = canal_url
+    session['canal_nombre'] = canal_nombre.lower().replace(" ", "_") if canal_nombre else None
+    session['nombre_evento'] = nombre_evento
+    session['evento_id'] = event_id
+
+    # ✅ Generar token único por evento y canal
+    token = generar_token(event_id, canal_nombre)
+
+    # Redirigir a la ruta con token
+    return redirect(url_for('ver_evento', token=token))
+
+@app.route('/evento/<token>')
+def ver_evento(token):
+    if not session.get('logged_in'):
+        return redirect(url_for('index'))
+
+    try:
+        datos = obtener_datos_desde_token(token)
+        event_id = datos['event_id']
+        canal_nombre = datos['canal_nombre']
+    except Exception:
+        return "Token inválido o alterado", 400
 
     canal_url = session.get('source_url')
     nombre_evento = session.get('nombre_evento')
-    event_id = session.get('evento_id')
 
-    if not canal_url or not event_id:
-        return "Faltan parámetros", 400
+    if not canal_url or not event_id or not nombre_evento:
+        return "Faltan datos", 400
+    
+    
+    # Incrementar la vista aquí
+    incrementar_vista(event_id)
 
     user_ip = request.remote_addr
     user = get_user_by_ip(user_ip)
     username = user['nombre'] if user else None
-    #print(username)
 
     return render_template("sitio/verPartido.html",
         evento=nombre_evento,
         user=user,
         username=username,
         event_id=event_id,
-        canal_url=canal_url
+        canal_url=canal_url,
+        canal_nombre=canal_nombre  # lo puedes usar en el template
     )
 
+#aumenta vistas cada vez que un usuario abre un EVENTO
+def incrementar_vista(event_id):
+    conexion = mysql.connector.connect(
+        host=os.environ.get("DB_HOST"),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        database=os.environ.get("DB_NAME"),
+        charset='utf8mb4',
+        port=int(os.environ.get("DB_PORT", 3306))
+    )
+    cursor = conexion.cursor()
 
-@app.route('/verCanal', methods=['GET', 'POST'])
+    try:
+        sql = "UPDATE eventos SET vistas = vistas + 1 WHERE id = %s"
+        cursor.execute(sql, (event_id,))
+        conexion.commit()
+    except mysql.connector.Error as err:
+        print(f"Error al actualizar vistas: {err}")
+    finally:
+        cursor.close()
+        conexion.close()
+
+#aumenta vistas cada vez que un usuario abre un CANAL
+def incrementar_vista_Canal(nombre_canal):
+    conexion = mysql.connector.connect(
+        host=os.environ.get("DB_HOST"),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        database=os.environ.get("DB_NAME"),
+        charset='utf8mb4',
+        port=int(os.environ.get("DB_PORT", 3306))
+    )
+    cursor = conexion.cursor()
+
+    try:
+        sql = "UPDATE canales SET vistas = vistas + 1 WHERE nombre = %s"
+        cursor.execute(sql, (nombre_canal,))
+        conexion.commit()
+    except mysql.connector.Error as err:
+        print(f"Error al actualizar vistas: {err}")
+    finally:
+        cursor.close()
+        conexion.close()
+
+
+@app.route('/verCanal', methods=['POST'])
 def verCanal():
     if not session.get('logged_in'):
         return redirect(url_for('index'))
 
-    if request.method == 'POST':
-        canal_url = request.form.get('canal_url')
-        canal_nombre = request.form.get('canal')
-        canal_imagen = request.form.get('imagen')
+    # Recuperar datos del formulario POST
+    canal_url = request.form.get('canal_url')
+    canal_nombre = request.form.get('canal')
+    canal_imagen = request.form.get('imagen')
 
-        if canal_url and canal_nombre:
-            session['url_canal'] = canal_url
-            session['nombre_canal'] = canal_nombre.lower().replace(" ", "_")
-            session['canal_imagen'] = canal_imagen
-
-    canal_url = session.get('url_canal')
-    canal_imagen = session.get('canal_imagen')
-
-    if not canal_url:
+    if not canal_url or not canal_nombre:
         return "Faltan parámetros", 400
 
-    return render_template("sitio/canal.html", imagen=canal_imagen, canal_url=canal_url)
+        # Incrementar la vista aquí
+    incrementar_vista_Canal(canal_nombre)
+
+    # Convertir el nombre del canal a slug para la URL
+    slug = canal_nombre.lower().replace(" ", "_")
+
+    # Guardar los datos en sesión
+    session['url_canal'] = canal_url
+    session['nombre_canal'] = slug
+    session['canal_imagen'] = canal_imagen
+
+    # Redirigir a la ruta con el canal como parte de la URL
+    return redirect(url_for('mostrar_canal', canal_nombre=slug))
+
+@app.route('/verCanal/<canal_nombre>', methods=['GET'])
+def mostrar_canal(canal_nombre):
+    if not session.get('logged_in'):
+        return redirect(url_for('index'))
+
+    # Obtener datos guardados en sesión
+    canal_url = session.get('url_canal')
+    canal_imagen = session.get('canal_imagen')
+    canal_slug = session.get('nombre_canal')
+
+    # Validar que la URL y el slug coincidan
+    if canal_nombre != canal_slug or not canal_url:
+        return "Datos no válidos", 400
+    
+
+    # Renderizar plantilla con los datos
+    return render_template("sitio/canal.html",
+                           canal_url=canal_url,
+                           imagen=canal_imagen,
+                           canal_nombre=canal_nombre)
+
 
 
 @app.route("/api/mensajes")
